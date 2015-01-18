@@ -160,6 +160,7 @@ local function Process(self, name, command, isGroup)
 			if VP then
 				self.char[name].bnet = VP >= 2
 			end
+			requestTime.GROUP[field] = now + 2
 		end
 	end
 end
@@ -215,12 +216,11 @@ handlers = {
 		self.char[name].buffer[channel] = nil
 	end,
 	["GMSP"] = function(self, name, message, channel)
-		local target, prefix, message = message:match(message:find("\30", nil, true) and "^(.+)\30([\1\2\3]?)(.+)$" or "^(.-)([\1\2\3]?)(.+)$")
+		local target, prefix, message = message:match(message:find("\30", nil, true) and "^(.-)\30([\1\2\3]?)(.+)$" or "^(.-)([\1\2\3]?)(.+)$")
 		if target ~= "" and target ~= self.player then return end
 		handlers[prefix ~= "" and ("MSP%s"):format(prefix) or "MSP"](self, name, message, channel)
 	end,
 }
-
 local function BNRebuildList()
 	for i = 1, select(2, BNGetNumFriends()) do
 		for j = 1, BNGetNumFriendToons(i) do
