@@ -152,6 +152,11 @@ local function Process(self, name, command, isGroup)
 	elseif action == "!" and version == (self.char[name].ver[field] or 0) then
 		self.char[name].time[field] = GetTime()
 	elseif action == "" then
+		-- If the message was only partly received, don't update TT
+		-- versioning -- we may have missed some of it.
+		if field == "TT" and self.char[name].buffer.partialMessage then
+			return
+		end
 		self.char[name].ver[field] = version
 		self.char[name].time[field] = GetTime()
 		self.char[name].field[field] = contents
@@ -195,25 +200,38 @@ handlers = {
 	end,
 	["MSP\2"] = function(self, name, message, channel)
 		local buffer = self.char[name].buffer[channel]
-		if buffer then
-			if type(buffer) == "table" then
-				buffer[#buffer + 1] = message
-			else
-				self.char[name].buffer[channel] = { buffer, message }
-			end
+		if not buffer then
+			message = message:match(".-\1(.+)$")
+			if not message then return end
+			buffer = ""
+			self.char[name].buffer.partialBuffer = true
+		end
+		if type(buffer) == "table" then
+			buffer[#buffer + 1] = message
+		else
+			self.char[name].buffer[channel] = { buffer, message }
 		end
 	end,
 	["MSP\3"] = function(self, name, message, channel)
 		local buffer = self.char[name].buffer[channel]
-		if buffer then
-			if type(buffer) == "table" then
-				buffer[#buffer + 1] = message
-				handlers["MSP"](self, name, table.concat(buffer))
-			else
-				handlers["MSP"](self, name, buffer .. message)
-			end
+		if not buffer then
+			message = message:match(".-\1(.+)$")
+			if not message then return end
+			buffer = ""
+			self.char[name].buffer.partialMessage = true
+		end
+		if self.char[name].buffer.partialBuffer then
+			self.char[name].buffer.partialMessage = true
+			self.char[name].buffer.partialBuffer = nil
+		end
+		if type(buffer) == "table" then
+			buffer[#buffer + 1] = message
+			handlers["MSP"](self, name, table.concat(buffer))
+		else
+			handlers["MSP"](self, name, buffer .. message)
 		end
 		self.char[name].buffer[channel] = nil
+		self.char[name].buffer.partialMessage = nil
 	end,
 	["GMSP"] = function(self, name, message, channel)
 		local target, prefix, message = message:match(message:find("\30", nil, true) and "^(.-)\30([\1\2\3]?)(.+)$" or "^(.-)([\1\2\3]?)(.+)$")
@@ -221,6 +239,7 @@ handlers = {
 		handlers[prefix ~= "" and ("MSP%s"):format(prefix) or "MSP"](self, name, message, channel)
 	end,
 }
+
 local function BNRebuildList()
 	for i = 1, select(2, BNGetNumFriends()) do
 		for j = 1, BNGetNumFriendToons(i) do
