@@ -40,7 +40,16 @@ assert(libbw and libbw.version >= 1, "libmspx requires libbw v1 or later.")
 if msp and msp.versionx and msp.versionx >= LIBMSPX_VERSION then
 	return
 elseif not msp then
-	msp = {}
+	msp = {
+		callback = {
+			received = {},
+		},
+		groupOut = {},
+	}
+else
+	if not msp.groupOut then
+		msp.groupOut = {}
+	end
 end
 
 msp.version = LIBMSP_VERSION
@@ -51,10 +60,6 @@ msp.versionx = LIBMSPX_VERSION
 -- protocol version isn't the real indicator there (meaning, yes, you can do
 -- version <= 1 with no Battle.net or version >= 2 with no group).
 msp.protocolversion = 2
-
-msp.callback = {
-	received = {},
-}
 
 local emptyMeta = {
 	__index = function(self, field)
@@ -121,7 +126,7 @@ local function Process(self, name, command, isGroup)
 		-- This mitigates some potential 'denial of service' attacks
 		-- against MSP.
 		if isGroup then
-			if requestTime.GROUP[field] and requestTime.GROUP[field] > now then
+			if msp.groupOut[field] or requestTime.GROUP[field] and requestTime.GROUP[field] > now then
 				return
 			end
 			requestTime.GROUP[field] = now + 2
@@ -462,6 +467,12 @@ local function AddFilter(name)
 	filter[name] = GetTime()
 end
 
+local function GroupSent(field)
+	for i, field in ipairs(fields) do
+		msp.groupOut[field] = nil
+	end
+end
+
 function msp:Send(name, chunks, channel, isResponse)
 	local payload
 	if type(chunks) == "string" then
@@ -512,28 +523,74 @@ function msp:Send(name, chunks, channel, isResponse)
 	end
 
 	local mspParts
-	local isGroup = channel ~= "WHISPER" and UnitRealmRelationship(Ambiguate(name, "none")) == LE_REALM_RELATION_COALESCED
-	channel = channel ~= "GAME" and channel or isGroup and (IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "RAID") or "WHISPER"
-	local prepend = isGroup and not isResponse and character .. "\30" or ""
-	local queue = isGroup and "MSP-GROUP" or ("MSP-%s"):format(name)
-	local callback = not isGroup and AddFilter or nil
-	local chunkSize = 255 - #prepend
-	if #payload <= chunkSize then
-		libbw:SendAddonMessage(not isGroup and "MSP" or "GMSP", prepend .. payload, channel, name, isResponse and "NORMAL" or "ALERT", queue, callback, name)
-		mspParts = 1
-	else
-		chunkSize = isGroup and (chunkSize - 1) or chunkSize
-		-- This line adds chunk metadata for addons which use it.
-		payload = ("XC=%u\1%s"):format(((#payload + 6) / chunkSize) + 1, payload)
-		libbw:SendAddonMessage(not isGroup and "MSP\1" or "GMSP", (isGroup and "%s\1%s" or "%s%s"):format(prepend, payload:sub(1, chunkSize)), channel, name, "BULK", queue, callback, name)
-		local position = chunkSize + 1
-		mspParts = 2
-		while position + chunkSize <= #payload do
-			libbw:SendAddonMessage(not isGroup and "MSP\2" or "GMSP", (isGroup and "%s\2%s" or "%s%s"):format(prepend, payload:sub(position, position + 254)), channel, name, "BULK", queue, callback, name)
-			position = position + chunkSize
-			mspParts = mspParts + 1
+	if channel == "WHISPER" or UnitRealmRelationship(Ambiguate(name, "none")) ~= LE_REALM_RELATION_COALESCED then
+		local queue = "MSP-" .. name
+		if #payload <= 255 then
+			libbw:SendAddonMessage("MSP", payload, "WHISPER", name, isResponse and "NORMAL" or "ALERT", queue, AddFilter, name)
+		else
+			-- This line adds chunk metadata for addons which use it.
+			payload = ("XC=%u\1%s"):format(((#payload + 6) / chunkSize) + 1, payload)
+			libbw:SendAddonMessage("MSP\1", payload:sub(1, 255), "WHISPER", name, "BULK", queue, AddFilter, name)
+			local position = 256
+			while position + 255 <= #payload do
+				libbw:SendAddonMessage("MSP\2", payload:sub(position, position + 254), "WHISPER", name, "BULK", queue, AddFilter, name)
+				position = position + 255
+			end
+			libbw:SendAddonMessage("MSP\3", payload:sub(position), "WHISPER", name, "BULK", queue, AddFilter, name)
 		end
-		libbw:SendAddonMessage(not isGroup and "MSP\3" or "GMSP", (isGroup and "%s\3%s" or "%s%s"):format(prepend, payload:sub(position)), channel, name, "BULK", queue, callback, name)
+	else -- GMSP
+		channel = channel ~= "GAME" and channel or IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "RAID"
+		local prepend = not isResponse and character .. "\30" or ""
+		local chunkSize = 255 - #prepend
+
+		if #payload <= chunkSize then
+			libbw:SendAddonMessage("GMSP", prepend .. payload, channel, name, isResponse and "NORMAL" or "ALERT", "MSP-GROUP")
+			mspParts = 1
+		else
+			chunkSize = chunkSize - 1
+
+			-- This line adds chunk metadata for addons which use it.
+			local chunkString = ("XC=%u\1"):format(((#payload + 6) / chunkSize) + 1)
+			payload = chunkString .. payload
+
+			-- Per-message fields are tracked, allowing us to not re-queue
+			-- any fields to the group until the previous send of those
+			-- fields has completed.
+			local fields
+			if not isRequest and type(chunks) == "table" then
+				fields = {}
+				local total = #chunkString
+				for i, chunk in ipairs(chunks) do
+					total = total + #chunk + 1 -- +1 for the \1 byte.
+					local field = chunk:match("^(%u%u)")
+					if field then
+						local messageNum = math.ceil(total/chunkSize)
+						local messageFields = fields[messageNum]
+						if not messageFields then
+							fields[messageNum] = { field }
+						else
+							messageFields[#messageFields + 1] = field
+						end
+						self.groupOut[field] = true
+					end
+				end
+			end
+
+			local messageFields = fields and fields[1] or nil
+			libbw:SendAddonMessage("GMSP", ("%s\1%s"):format(prepend, payload:sub(1, chunkSize)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+
+			local position = chunkSize + 1
+			mspParts = 2
+			while position + chunkSize <= #payload do
+				messageFields = fields and fields[mspParts] or nil
+				libbw:SendAddonMessage("GMSP", ("%s\2%s"):format(prepend, payload:sub(position, position + chunkSize - 1)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+				position = position + chunkSize
+				mspParts = mspParts + 1
+			end
+
+			messageFields = fields and fields[mspParts] or nil
+			libbw:SendAddonMessage("GMSP", ("%s\3%s"):format(prepend, payload:sub(position)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+		end
 	end
 
 	return mspParts, bnParts
