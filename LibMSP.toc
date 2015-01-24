@@ -1,0 +1,11 @@
+## Interface: 60000
+## Title: LibMSPX
+## Version: 0_alpha2
+## Author: Bor of Wyrmrest Accord (US)
+## Notes: New MSP implementation and supporting libraries.
+## X-Category: Library
+## X-License: ISC
+
+libfakedraw.lua
+libbw.lua
+libmspx.lua
