@@ -107,6 +107,20 @@ msp.my = {}
 msp.myver = {}
 msp.my.VP = tostring(msp.protocolversion)
 
+function msp:Name(name, realm)
+	if not name or name == "" then
+		return nil
+	elseif name:find(FULL_PLAYER_NAME:format(".+", ".+")) then
+		return name
+	elseif realm and realm ~= "" then
+		-- If a realm was provided, use it.
+		return FULL_PLAYER_NAME:format(name, (realm:gsub("%s*%-*", "")))
+	end
+	return FULL_PLAYER_NAME:format(name, (GetRealmName():gsub("%s*%-*", "")))
+end
+
+msp.player = msp:Name(UnitName("player"))
+
 local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "RC", "CU", "FR", "FC" }
 
 local ttCache
@@ -208,8 +222,7 @@ handlers = {
 		if not buffer then
 			message = message:match(".-\1(.+)$")
 			if not message then return end
-			buffer = ""
-			self.char[name].buffer.partialBuffer = true
+			buffer = { "", partial = true }
 		end
 		if type(buffer) == "table" then
 			buffer[#buffer + 1] = message
@@ -225,11 +238,10 @@ handlers = {
 			buffer = ""
 			self.char[name].buffer.partialMessage = true
 		end
-		if self.char[name].buffer.partialBuffer then
-			self.char[name].buffer.partialMessage = true
-			self.char[name].buffer.partialBuffer = nil
-		end
 		if type(buffer) == "table" then
+			if buffer.partial then
+				self.char[name].buffer.partialMessage = true
+			end
 			buffer[#buffer + 1] = message
 			handlers["MSP"](self, name, table.concat(buffer))
 		else
@@ -239,21 +251,46 @@ handlers = {
 		self.char[name].buffer.partialMessage = nil
 	end,
 	["GMSP"] = function(self, name, message, channel)
-		local target, prefix, message = message:match(message:find("\30", nil, true) and "^(.-)\30([\1\2\3]?)(.+)$" or "^(.-)([\1\2\3]?)(.+)$")
-		if target ~= "" and target ~= self.player then return end
-		handlers[prefix ~= "" and ("MSP%s"):format(prefix) or "MSP"](self, name, message, channel)
+		local target, prefix
+		if message:find("\30", nil, true) then
+			target, prefix, message = message:match("^(.-)\30([\1\2\3]?)(.+)$")
+		else
+			prefix, message = message:match("^([\1\2\3]?)(.+)$")
+		end
+		if target and target ~= self.player then return end
+		handlers["MSP" .. prefix](self, name, message, channel)
 	end,
 }
 
+local bnetMap
 local function BNRebuildList()
+	bnetMap = {}
 	for i = 1, select(2, BNGetNumFriends()) do
 		for j = 1, BNGetNumFriendToons(i) do
 			local active, toonName, client, realmName, realmID, faction, race, class, blank, zoneName, level, gameText, broadcastText, broadcastTime, isConnected, toonID = BNGetFriendToonInfo(i, j)
-			if client == "WoW" then
-				msp.bnet[msp:Name(toonName, realmName)] = toonID
+			if client == "WoW" and realmName ~= "" then
+				local name = msp:Name(toonName, realmName)
+				if not msp.char[name].supported then
+					msp.char[name].scantime = 0
+				end
+				bnetMap[name] = toonID
 			end
+		else
+			Process(self, name, message)
 		end
 	end
+	if not next(bnetMap) then
+		bnetMap = nil
+		return false
+	end
+	return true
+end
+
+function msp:GetPresenceID(name)
+	if not BNConnected() or not bnetMap and not BNRebuildList() or not bnetMap[name] or not select(15, BNGetToonInfo(bnetMap[name])) then
+		return nil
+	end
+	return bnetMap[name]
 end
 
 local raidUnits, partyUnits = {}, {}
@@ -280,30 +317,35 @@ msp.dummyframe = {
 }
 
 mspFrame:SetScript("OnEvent", function(self, event, prefix, body, channel, sender)
-	if event == "CHAT_MSG_ADDON" and handlers[prefix] then
+	if event == "CHAT_MSG_ADDON" then
+		if not handlers[prefix] or prefix == "GMSP" and msp.noGMSP then return end
 		local name = msp:Name(sender)
 		if name ~= msp.player then
 			msp.char[name].supported = true
 			msp.char[name].scantime = nil
 			handlers[prefix](msp, name, body, channel)
 		end
-	elseif event == "BN_CHAT_MSG_ADDON" and handlers[prefix] then
+	elseif event == "BN_CHAT_MSG_ADDON" then
+		if not handlers[prefix] then return end
 		local active, toonName, client, realmName = BNGetToonInfo(sender)
 		local name = msp:Name(toonName, realmName)
-		msp.bnet[name] = sender
+		if bnetMap then
+			bnetMap[name] = sender
+		end
 
 		msp.char[name].supported = true
 		msp.char[name].scantime = nil
 		msp.char[name].bnet = true
 		handlers[prefix](msp, name, body, "BN")
 	elseif event == "BN_TOON_NAME_UPDATED" or event == "BN_FRIEND_TOON_ONLINE" then
+		if not bnetMap then return end
 		local active, toonName, client, realmName = BNGetToonInfo(prefix)
-		if client == "WoW" then
+		if client == "WoW" and realmName ~= "" then
 			local name = msp:Name(toonName, realmName)
-			if not msp.bnet[name] and not msp.char[name].supported then
+			if not bnetMap[name] and not msp.char[name].supported then
 				msp.char[name].scantime = 0
 			end
-			msp.bnet[name] = prefix
+			bnetMap[name] = prefix
 		end
 	elseif event == "GROUP_ROSTER_UPDATE" then
 		local units = IsInRaid() and raidUnits or partyUnits
@@ -326,7 +368,7 @@ mspFrame:SetScript("OnEvent", function(self, event, prefix, body, channel, sende
 	elseif event == "BN_DISCONNECTED" then
 		self:UnregisterEvent("BN_TOON_NAME_UPDATED")
 		self:UnregisterEvent("BN_FRIEND_TOON_ONLINE")
-		wipe(msp.bnet)
+		bnetMap = nil
 	end
 end)
 mspFrame:RegisterEvent("CHAT_MSG_ADDON")
@@ -334,9 +376,7 @@ mspFrame:RegisterEvent("BN_CHAT_MSG_ADDON")
 mspFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 mspFrame:RegisterEvent("BN_CONNECTED")
 mspFrame:RegisterEvent("BN_DISCONNECTED")
-msp.bnet = {}
 if BNConnected() then
-	BNRebuildList()
 	mspFrame:RegisterEvent("BN_TOON_NAME_UPDATED")
 	mspFrame:RegisterEvent("BN_FRIEND_TOON_ONLINE")
 end
@@ -345,20 +385,6 @@ msp.dummyframex = mspFrame
 for prefix, handler in pairs(handlers) do
 	RegisterAddonMessagePrefix(prefix)
 end
-
-function msp:Name(name, realm)
-	if not name or name == "" then
-		return nil
-	elseif name:find(FULL_PLAYER_NAME:format(".+", ".+")) then
-		return name
-	elseif realm and realm ~= "" then
-		-- If a realm was provided, use it.
-		return FULL_PLAYER_NAME:format(name, (realm:gsub("%s*%-*", "")))
-	end
-	return FULL_PLAYER_NAME:format(name, (GetRealmName():gsub("%s*%-*", "")))
-end
-
-msp.player = msp:Name(UnitName("player"))
 
 -- These fields can be positively enormous. Don't update the version on
 -- first run -- assume the addon is smart enough to load what they last
@@ -450,24 +476,21 @@ end
 -- within 2.5s of the last addon message send time. This generally
 -- preserves the offline notices for standard whispers (except with bad
 -- timing).
-local filter = setmetatable({}, { __mode = "v" })
+local filter = {}
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(self, event, message)
 	local name = message:match(ERR_CHAT_PLAYER_NOT_FOUND_S:format("(.+)"))
-	if not name or name == "" or not filter[name] then
+	if not name or name == "" or not filter[name] or filter[name] < GetTime() then
+		filter[name] = nil
 		return false
 	end
-	local doFilter = filter[name] > (GetTime() - 2.500)
-	if not doFilter then
-		filter[name] = nil
-	end
-	return doFilter
+	return true
 end)
 
 local function AddFilter(name)
-	filter[name] = GetTime()
+	filter[name] = GetTime() + 2.500
 end
 
-local function GroupSent(field)
+local function GroupSent(fields)
 	for i, field in ipairs(fields) do
 		msp.groupOut[field] = nil
 	end
@@ -484,10 +507,10 @@ function msp:Send(name, chunks, channel, isResponse)
 		return 0, 0
 	end
 
-	if (not channel or channel == "BN") and self.bnet[name] then
-		if not select(15, BNGetToonInfo(self.bnet[name])) then
-			self.bnet[name] = nil
-		elseif not channel then
+	local presenceID
+	if not channel or channel == "BN" then
+		presenceID = self:GetPresenceID(name)
+		if not channel and presenceID then
 			if self.char[name].bnet == false then
 				channel = "GAME"
 			elseif self.char[name].bnet == true then
@@ -497,8 +520,7 @@ function msp:Send(name, chunks, channel, isResponse)
 	end
 
 	local bnParts = 0
-	if (not channel or channel == "BN") and self.bnet[name] then
-		local presenceID = self.bnet[name]
+	if (not channel or channel == "BN") and presenceID then
 		local queue = ("MSP-%u"):format(presenceID)
 		if #payload <= 4078 then
 			libbw:BNSendGameData(presenceID, "MSP", payload, isResponse and "NORMAL" or "ALERT", queue)
@@ -523,7 +545,7 @@ function msp:Send(name, chunks, channel, isResponse)
 	end
 
 	local mspParts
-	if channel == "WHISPER" or UnitRealmRelationship(Ambiguate(name, "none")) ~= LE_REALM_RELATION_COALESCED then
+	if channel == "WHISPER" or self.noGMSP or UnitRealmRelationship(Ambiguate(name, "none")) ~= LE_REALM_RELATION_COALESCED then
 		local queue = "MSP-" .. name
 		if #payload <= 255 then
 			libbw:SendAddonMessage("MSP", payload, "WHISPER", name, isResponse and "NORMAL" or "ALERT", queue, AddFilter, name)
@@ -540,7 +562,7 @@ function msp:Send(name, chunks, channel, isResponse)
 		end
 	else -- GMSP
 		channel = channel ~= "GAME" and channel or IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "RAID"
-		local prepend = not isResponse and character .. "\30" or ""
+		local prepend = not isResponse and name .. "\30" or ""
 		local chunkSize = 255 - #prepend
 
 		if #payload <= chunkSize then
@@ -559,12 +581,15 @@ function msp:Send(name, chunks, channel, isResponse)
 			local fields
 			if not isRequest and type(chunks) == "table" then
 				fields = {}
-				local total = #chunkString
+				local total, totalFields = #chunkString, #chunks
 				for i, chunk in ipairs(chunks) do
-					total = total + #chunk + 1 -- +1 for the \1 byte.
+					total = total + #chunk
+					if i ~= totalFields then
+						total = total + 1 -- +1 for the \1 byte.
+					end
 					local field = chunk:match("^(%u%u)")
 					if field then
-						local messageNum = math.ceil(total/chunkSize)
+						local messageNum = math.ceil(total / chunkSize)
 						local messageFields = fields[messageNum]
 						if not messageFields then
 							fields[messageNum] = { field }
@@ -576,20 +601,20 @@ function msp:Send(name, chunks, channel, isResponse)
 				end
 			end
 
-			local messageFields = fields and fields[1] or nil
-			libbw:SendAddonMessage("GMSP", ("%s\1%s"):format(prepend, payload:sub(1, chunkSize)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+			local messageFields = fields and fields[1]
+			libbw:SendAddonMessage("GMSP", ("%s\1%s"):format(prepend, payload:sub(1, chunkSize)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent, messageFields)
 
 			local position = chunkSize + 1
 			mspParts = 2
 			while position + chunkSize <= #payload do
-				messageFields = fields and fields[mspParts] or nil
-				libbw:SendAddonMessage("GMSP", ("%s\2%s"):format(prepend, payload:sub(position, position + chunkSize - 1)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+				messageFields = fields and fields[mspParts]
+				libbw:SendAddonMessage("GMSP", ("%s\2%s"):format(prepend, payload:sub(position, position + chunkSize - 1)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent, messageFields)
 				position = position + chunkSize
 				mspParts = mspParts + 1
 			end
 
-			messageFields = fields and fields[mspParts] or nil
-			libbw:SendAddonMessage("GMSP", ("%s\3%s"):format(prepend, payload:sub(position)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent or nil, messageFields)
+			messageFields = fields and fields[mspParts]
+			libbw:SendAddonMessage("GMSP", ("%s\3%s"):format(prepend, payload:sub(position)), channel, name, "BULK", "MSP-GROUP", messageFields and GroupSent, messageFields)
 		end
 	end
 
