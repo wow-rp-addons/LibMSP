@@ -65,6 +65,14 @@ msp.versionx = LIBMSPX_VERSION
 -- version <= 1 with no Battle.net or version >= 2 with no group).
 msp.protocolversion = 2
 
+-- Set this before running msp:Update() to change the first-run version update
+-- behaviour. Using 2 is recommended and generally safe.
+--	- 0: Increment all field versions by 1 (LibMSP behaviour).
+--	- 1: Increment all field versions by 1, except DE and HI.
+--	- 2: Only incrememnt runtime field versions (GC, GF, GR, GS, GU, TT, VA).
+--	- 3: Do not increment any field versions.
+msp.versionUpdate = 2
+
 local emptyMeta = {
 	__index = function(self, field)
 		return ""
@@ -331,11 +339,13 @@ local mspFrame = msp.dummyframex or msp.dummyframe or CreateFrame("Frame")
 -- Some addons try to mess with the old dummy frame. If they want to keep
 -- doing that, they need to update the code to handle all the new events
 -- (at minimum, BN_CHAT_MSG_ADDON).
-local noFunc = function() end
-msp.dummyframe = {
-	RegisterEvent = noFunc,
-	UnregisterEvent = noFunc,
-}
+do
+	local noFunc = function() end
+	msp.dummyframe = {
+		RegisterEvent = noFunc,
+		UnregisterEvent = noFunc,
+	}
+end
 
 mspFrame:SetScript("OnEvent", function(self, event, prefix, body, channel, sender)
 	if event == "CHAT_MSG_ADDON" then
@@ -411,9 +421,10 @@ end
 -- first run -- assume the addon is smart enough to load what they last
 -- left us with.
 local LONG_FIELD = { DE = true, HI = true }
+local RUNTIME_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, VA = true }
 local myPrevious = {}
 function msp:Update()
-	local updated, firstUpdate = false, next(myPrevious) == nil
+	local updated, firstUpdate = false, self.versionUpdate ~= 0 and next(myPrevious) == nil
 	local tt = {}
 	for field, contents in pairs(myPrevious) do
 		if not self.my[field] then
@@ -430,7 +441,7 @@ function msp:Update()
 				-- Since VP is always a number, just use the protocol
 				-- version as the field version. Simple!
 				self.myver[field] = self.protocolversion
-			elseif self.myver[field] and (not firstUpdate or not LONG_FIELD[field]) then
+			elseif self.myver[field] and (not firstUpdate or self.versionUpdate == 1 and not LONG_FIELD[field] or self.versionUpdate == 2 and RUNTIME_FIELD[field]) then
 				self.myver[field] = (self.myver[field] or 0) + 1
 			elseif contents ~= "" and not self.myver[field] then
 				self.myver[field] = 1
@@ -446,7 +457,7 @@ function msp:Update()
 		end
 	end
 	local newtt = table.concat(tt, "\1") or ""
-	if ttCache ~= ("%s\1TT%u"):format(newtt, (self.myver.TT or 0)) then
+	if (not firstUpdate or self.versionUpdate ~= 3) and ttCache ~= ("%s\1TT%u"):format(newtt, (self.myver.TT or 0)) then
 		self.myver.TT = (self.myver.TT or 0) + 1
 		ttCache = ("%s\1TT%u"):format(newtt, self.myver.TT)
 	end
