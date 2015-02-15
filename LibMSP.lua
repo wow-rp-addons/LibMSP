@@ -339,17 +339,15 @@ local mspFrame = msp.dummyframex or msp.dummyframe or CreateFrame("Frame")
 -- Some addons try to mess with the old dummy frame. If they want to keep
 -- doing that, they need to update the code to handle all the new events
 -- (at minimum, BN_CHAT_MSG_ADDON).
-do
-	local noFunc = function() end
-	msp.dummyframe = {
-		RegisterEvent = noFunc,
-		UnregisterEvent = noFunc,
-	}
-end
+local noFunc = function() end
+msp.dummyframe = {
+	RegisterEvent = noFunc,
+	UnregisterEvent = noFunc,
+}
 
 mspFrame:SetScript("OnEvent", function(self, event, prefix, body, channel, sender)
 	if event == "CHAT_MSG_ADDON" then
-		if not handlers[prefix] or prefix == "GMSP" and msp.noGMSP then return end
+		if not handlers[prefix] then return end
 		local name = msp:Name(sender)
 		if name ~= msp.player then
 			msp.char[name].supported = true
@@ -417,9 +415,6 @@ for prefix, handler in pairs(handlers) do
 	RegisterAddonMessagePrefix(prefix)
 end
 
--- These fields can be positively enormous. Don't update the version on
--- first run -- assume the addon is smart enough to load what they last
--- left us with.
 local LONG_FIELD = { DE = true, HI = true }
 local RUNTIME_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, VA = true }
 local myPrevious = {}
@@ -473,7 +468,7 @@ function msp:Request(name, fields)
 	end
 	name = self:Name(name)
 	local now = GetTime()
-	if self.char[name].supported == false and (now < self.char[name].scantime + PROBE_FREQUENCY) then
+	if self.char[name].supported == false and now < self.char[name].scantime + PROBE_FREQUENCY then
 		return false
 	elseif not self.char[name].supported then
 		self.char[name].supported = false
@@ -486,7 +481,7 @@ function msp:Request(name, fields)
 	end
 	local toSend = {}
 	for i, field in ipairs(fields) do
-		if not self.char[name].supported or not self.char[name].time[field] or (now > self.char[name].time[field] + FIELD_FREQUENCY) then
+		if not self.char[name].supported or not self.char[name].time[field] or now > self.char[name].time[field] + FIELD_FREQUENCY then
 			if not self.char[name].supported or not self.char[name].ver[field] or self.char[name].ver[field] == 0 then
 				toSend[#toSend + 1] = "?" .. field
 			else
@@ -577,7 +572,7 @@ function msp:Send(name, chunks, channel, isResponse)
 	end
 
 	local mspParts
-	if channel == "WHISPER" or self.noGMSP or UnitRealmRelationship(Ambiguate(name, "none")) ~= LE_REALM_RELATION_COALESCED then
+	if channel == "WHISPER" or UnitRealmRelationship(Ambiguate(name, "none")) ~= LE_REALM_RELATION_COALESCED then
 		local queue = "MSP-" .. name
 		if #payload <= 255 then
 			libbw:SendAddonMessage("MSP", payload, "WHISPER", name, isResponse and "NORMAL" or "ALERT", queue, AddFilter, name)
