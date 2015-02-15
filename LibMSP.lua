@@ -43,12 +43,16 @@ elseif not msp then
 	msp = {
 		callback = {
 			received = {},
+			updated = {},
 		},
 		groupOut = {},
 	}
 else
 	if not msp.groupOut then
 		msp.groupOut = {}
+	end
+	if not msp.callback.updated then
+		msp.callback.updated = {}
 	end
 end
 
@@ -121,7 +125,7 @@ end
 
 msp.player = msp:Name(UnitName("player"))
 
-local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "RC", "CU", "FR", "FC" }
+local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "RC", "CU", "CO", "FR", "FC", "IC" }
 
 local ttCache
 local requestTime = setmetatable({}, {
@@ -186,18 +190,30 @@ local function Process(self, name, command, isGroup)
 			end
 			requestTime.GROUP[field] = now + 2
 		end
+		return field, contents
 	end
 end
 
 local handlers
 handlers = {
 	["MSP"] = function(self, name, message, channel)
+		local updatedCallback = #msp.callback.updated > 0
+		local updatedFields
 		if message:find("\1", nil, true) then
 			for command in message:gmatch("([^\1]+)\1*") do
-				Process(self, name, command, channel ~= "WHISPER" and channel ~= "BN")
+				local field, contents = Process(self, name, command, channel ~= "WHISPER" and channel ~= "BN")
+				if updatedCallback and field then
+					if not updatedFields then
+						updatedFields = {}
+					end
+					updatedFields[field] = contents
+				end
 			end
 		else
-			Process(self, name, message)
+			local field, contentsi = Process(self, name, message)
+			if updatedCallback and field then
+				updatedFields = { [field] = contents }
+			end
 		end
 		for i, func in ipairs(self.callback.received) do
 			pcall(func, name)
@@ -206,6 +222,11 @@ handlers = {
 				-- Same thing, but for name without realm, supports
 				-- unmaintained code.
 				pcall(func, ambiguated)
+			end
+		end
+		if updatedFields then
+			for i, func in ipairs(self.callback.updated) do
+				pcall(func, name, updatedFields)
 			end
 		end
 		if self.reply then
