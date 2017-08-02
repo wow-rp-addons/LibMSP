@@ -27,6 +27,9 @@
 	- All field names are two capital letters. Best if you agree any extensions.
 	
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
+
+	Modified by Ellypse <ellypse@totalrp3.info> @EllypseCelwe, under the same licensing
+	On 2017/07/31: Added support for the XC field, indicating the total number of chunks sent
 ]]
 
 local libmsp_version = 8
@@ -86,6 +89,7 @@ local strfind, strmatch, strsub, strgmatch = strfind, strmatch, strsub, string.g
 local tinsert, tconcat = tinsert, table.concat
 local tostring, tonumber, wipe, next = tostring, tonumber, wipe, next
 local GetTime = GetTime
+local type, format, ipairs = type, string.format, ipairs
 
 local MSP_TT_ALONE = { 'TT' }
 local MSP_FIELDS_IN_TT = { 'VP', 'VA', 'NA', 'NH', 'NI', 'NT', 'RA', 'FR', 'FC', 'CU' }
@@ -351,7 +355,7 @@ function msp:Send( player, chunks )
 		else
 			-- If we will be sending more than one message, we insert the number of incoming messages in
 			-- the XC field as the beggining of the payload.
-			payload = string.format("XC=%d\001%s", ((#payload + 6) / 255) + 1, payload);
+			payload = format("XC=%d\001%s", ((#payload + 6) / 255) + 1, payload);
 			local chunk = strsub( payload, 1, 255 )
 			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\1", chunk, "WHISPER", player, queue )
 			local pos = 256
