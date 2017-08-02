@@ -112,6 +112,14 @@ function msp_onevent( this, event, prefix, body, dist, sender )
 end
 
 function msp_incomingfirst( sender, body )
+	-- Check if a XC field is provided to indicate the amount of incoming chunks
+	local totalChunks = tonumber(body:match("^XC=(%d+)\001"))
+	if totalChunks then
+		msp.char[sender].totalChunks = totalChunks
+		msp.char[sender].amountOfChunksAlreadyReceived = 1
+		-- We can remove the XC field as it is not a profile info
+		body = body:gsub("^XC=%d+\001", "")
+	end
 	msp.char[ sender ].buffer = body
 end
 
@@ -126,6 +134,12 @@ function msp_incomingnext( sender, body )
 			temp[ 2 ] = body
 			msp.char[ sender ].buffer = temp
 		end
+
+		-- If the sender has previously indicated the amount of incoming cunks
+		if msp.char[sender].totalChunks then
+			-- We increment the amount of chunks already received
+			msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].amountOfChunksAlreadyReceived + 1;
+		end
 	end
 end
 
@@ -138,6 +152,13 @@ function msp_incominglast( sender, body )
 			garbage[ buf ] = true
 		else
 			msp_incoming( sender, buf .. body )
+		end
+
+		-- If the sender has previously indicated the amount of incoming cunks
+		if msp.char[sender].totalChunks then
+			-- Make sure the amountOfChunksAlreadyReceived is equal to totalChunks
+			-- (can be different in really rare occasions)
+			msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].totalChunks;
 		end
 	end
 end
@@ -328,6 +349,9 @@ function msp:Send( player, chunks )
 			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue )
 			return 1
 		else
+			-- If we will be sending more than one message, we insert the number of incoming messages in
+			-- the XC field as the beggining of the payload.
+			payload = string.format("XC=%d\001%s", ((#payload + 6) / 255) + 1, payload);
 			local chunk = strsub( payload, 1, 255 )
 			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\1", chunk, "WHISPER", player, queue )
 			local pos = 256
