@@ -8,7 +8,7 @@ It is a simple challenge/response protocol, where a client send request to anoth
 
 The orignal LibMSP is hosted on [its author, Etarna,'s website][official website] as a ZIP file. I found this very limiting and wanted a way for any user of the LibMSP library to participate in its improvement. I strongly encourage any developer of an RP add-on that uses the LibMSP to come here and participate, offer help and suggestions to improve the library, participate in the documentation, in hope that this repository will replace the static website as the source for the LibMSP library.
 
-## Differences with [Etarna's verwion][official website]
+## Differences with [Etarna's version][official website]
 
 - Added support for the `XC` field (pioneered by [XRP]) to indicate how many chunks (messages) will be sent/received total. The `msp.char[sender]` table has two new fields: `totalChunks` which is the value of the `XC` field received, and `amountOfChunksAlreadyReceived` which is managed by the library and is incremented everytime a new chunk is received, allowing the add-on to display a progression like `amountOfChunksAlreadyReceived/totalChunks`. When the final message is received, `amountOfChunksAlreadyReceived` is equal to `totalChunks`.
 
