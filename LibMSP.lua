@@ -30,6 +30,7 @@
 
 	Modified by Ellypse <ellypse@totalrp3.info> @EllypseCelwe, under the same licensing
 	On 2017/07/31: Added support for the XC field, indicating the total number of chunks sent
+	On 2018/06/15: Added support for patch 8.0.1
 ]]
 
 local libmsp_version = 8
@@ -233,7 +234,11 @@ msp.dummyframe:SetScript( "OnEvent", msp_onevent )
 msp.dummyframe:RegisterEvent( "CHAT_MSG_ADDON" )
 
 for prefix, handler in pairs( MSP_INCOMING_HANDLER ) do
-	RegisterAddonMessagePrefix( prefix )
+	if C_ChatInfo then
+		C_ChatInfo.RegisterAddonMessagePrefix( prefix )
+	else
+		RegisterAddonMessagePrefix( prefix )
+	end
 end
 
 --[[
