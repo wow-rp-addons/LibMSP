@@ -44,8 +44,11 @@ else
 end
 local msp = _G.msp
 msp.version = libmsp_version
+---@type ChatThrottleLib
 local ChatThrottleLib = assert(ChatThrottleLib, "LibMSP requires ChatThrottleLib")
 assert(ChatThrottleLib.version >= 22, "LibMSP requires ChatThrottleLib v22 or later")
+
+local FIELD_SEPARATOR = "~"
 
 msp.protocolversion = 1
 
@@ -110,6 +113,7 @@ end
 
 function msp_onevent( this, event, prefix, body, dist, sender )
 	if event == "CHAT_MSG_ADDON" then
+		print(body)
 		if MSP_INCOMING_HANDLER[ prefix ] then
 			MSP_INCOMING_HANDLER[ prefix ]( sender, body )
 		end
@@ -118,12 +122,12 @@ end
 
 function msp_incomingfirst( sender, body )
 	-- Check if a XC field is provided to indicate the amount of incoming chunks
-	local totalChunks = tonumber(body:match("^XC=(%d+)\001"))
+	local totalChunks = tonumber(body:match("^XC=(%d+)"..FIELD_SEPARATOR))
 	if totalChunks then
 		msp.char[sender].totalChunks = totalChunks
 		msp.char[sender].amountOfChunksAlreadyReceived = 1
 		-- We can remove the XC field as it is not a profile info
-		body = body:gsub("^XC=%d+\001", "")
+		body = body:gsub("^XC=%d+"..FIELD_SEPARATOR, "")
 	end
 	msp.char[ sender ].buffer = body
 end
@@ -173,8 +177,8 @@ function msp_incoming( sender, body )
 	msp.char[ sender ].scantime = nil
 	msp.reply = newtable()
 	if body ~= "" then
-		if strfind( body, "\1", 1, true ) then
-			for chunk in strgmatch( body, "([^\1]+)\1*" ) do
+		if strfind( body, FIELD_SEPARATOR, 1, true ) then
+			for chunk in strgmatch( body, "([^" .. FIELD_SEPARATOR .. "]+)"..FIELD_SEPARATOR .. "*" ) do
 				msp_incomingchunk( sender, chunk )
 			end
 		else
@@ -224,9 +228,9 @@ end
 
 MSP_INCOMING_HANDLER = {
 	["MSP"] = msp_incoming,
-	["MSP\1"] = msp_incomingfirst,
-	["MSP\2"] = msp_incomingnext,
-	["MSP\3"] = msp_incominglast
+	["MSP1"] = msp_incomingfirst,
+	["MSP2"] = msp_incomingnext,
+	["MSP3"] = msp_incominglast
 }
 
 msp.dummyframe = msp.dummyframe or CreateFrame( "Frame", "libmspDummyFrame" )
@@ -275,10 +279,10 @@ function msp:Update()
 			tinsert( tt, field .. (msp.myver[ field ] or "") .. "=" .. value )
 		end
 	end
-	local newtt = tconcat( tt, "\1" ) or ""
-	if msp_tt_cache ~= newtt.."\1TT"..(msp.myver.TT or 0) then
+	local newtt = tconcat( tt, FIELD_SEPARATOR ) or ""
+	if msp_tt_cache ~= newtt..FIELD_SEPARATOR.."TT"..(msp.myver.TT or 0) then
 		msp.myver.TT = (msp.myver.TT or 0) + 1
-		msp_tt_cache = newtt.."\1TT"..msp.myver.TT
+		msp_tt_cache = newtt..FIELD_SEPARATOR.."TT"..msp.myver.TT
 	end
 	garbage[ tt ] = true
 	return updated
@@ -349,30 +353,30 @@ function msp:Send( player, chunks )
 	if type( chunks ) == "string" then
 		payload = chunks
 	elseif type( chunks ) == "table" then
-		payload = tconcat( chunks, "\1" )
+		payload = tconcat( chunks, FIELD_SEPARATOR )
 	end
 	if payload ~= "" then
 		local len = #payload
 		local queue = "MSPWHISPER" .. player
 		if len < 256 then
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue , nil, nil, true)
 			return 1
 		else
 			-- If we will be sending more than one message, we insert the number of incoming messages in
 			-- the XC field as the beggining of the payload.
-			payload = format("XC=%d\001%s", ((#payload + 6) / 255) + 1, payload);
+			payload = format("XC=%d" .. FIELD_SEPARATOR .. "%s", ((#payload + 6) / 255) + 1, payload);
 			local chunk = strsub( payload, 1, 255 )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\1", chunk, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP1", chunk, "WHISPER", player, queue, nil, nil, true )
 			local pos = 256
 			local parts = 2
 			while pos + 255 <= len do
 				chunk = strsub( payload, pos, pos + 254 )
-				ChatThrottleLib:SendAddonMessage( "BULK", "MSP\2", chunk, "WHISPER", player, queue )
+				ChatThrottleLib:SendAddonMessage( "BULK", "MSP2", chunk, "WHISPER", player, queue, nil, nil, true )
 				pos = pos + 255
 				parts = parts + 1
 			end
 			chunk = strsub( payload, pos )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\3", chunk, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP3", chunk, "WHISPER", player, queue, nil, nil, true )
 			return parts
 		end
 	end
