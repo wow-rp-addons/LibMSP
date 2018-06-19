@@ -33,7 +33,7 @@
 	On 2018/06/15: Added support for patch 8.0.1
 ]]
 
-local libmsp_version = 8
+local libmsp_version = 9
 
 if msp then
 	if msp.version >= libmsp_version then
@@ -46,11 +46,9 @@ local msp = _G.msp
 msp.version = libmsp_version
 ---@type ChatThrottleLib
 local ChatThrottleLib = assert(ChatThrottleLib, "LibMSP requires ChatThrottleLib")
-assert(ChatThrottleLib.version >= 22, "LibMSP requires ChatThrottleLib v22 or later")
+assert(ChatThrottleLib.version >= 25, "LibMSP requires ChatThrottleLib v22 or later")
 
-local FIELD_SEPARATOR = "~"
-
-msp.protocolversion = 1
+msp.protocolversion = 2
 
 msp.callback = {
 	received = {}
@@ -101,6 +99,46 @@ local MSP_TT_FIELD = { VP=true, VA=true, NA=true, NH=true, NI=true, NT=true, RA=
 local MSP_PROBE_FREQUENCY = 300.0 + math.random(0, 60) -- Wait 5-6 minutes for someone to respond before asking again
 local MSP_FIELD_UPDATE_FREQUENCY = 10.0 + math.random(0, 5) -- Fields newer than 10-15 seconds old are still fresh
 
+-- Ellypse modifications:
+-- With the move to SendAddonMessageLogged, the separator has to be a printable character
+-- Using a two characters length separator is necessary for properly escaping the separator from the user inputted text
+-- The separator will actually be ~~ and every ~ in the body of the fields will be replace by !~ before being sent
+local SEPARATOR_CHARACTER = "~"
+local ESCAPING_CHARACTER = "!"
+local FIELD_SEPARATOR = SEPARATOR_CHARACTER .. SEPARATOR_CHARACTER
+local ESCAPED_SEPARATOR = ESCAPING_CHARACTER .. SEPARATOR_CHARACTER
+
+-- Escape the given text, replacing all instances of SEPARATOR_CHARACTER by ESCAPED_SEPARATOR
+local function escapeText(text)
+	return text:gsub(SEPARATOR_CHARACTER, ESCAPED_SEPARATOR)
+end
+
+-- Un-escape the given text, replacing all instances of ESCAPED_SEPARATOR by SEPARATOR_CHARACTER
+local function unescapeText(text)
+	return text:gsub(ESCAPED_SEPARATOR, SEPARATOR_CHARACTER)
+end
+
+-- Split a string into a table of strings using a given separator
+local function strsplit(text, separator)
+
+	local t = {}
+	local fpat = "(.-)" .. separator
+	local last_end = 1
+	local s, e, cap = text:find(fpat, 1)
+	while s do
+		if s ~= 1 or cap ~= "" then
+			table.insert(t,cap)
+		end
+		last_end = e+1
+		s, e, cap = text:find(fpat, last_end)
+	end
+	if last_end <= #text then
+		cap = text:sub(last_end)
+		table.insert(t, cap)
+	end
+	return t
+end
+
 local garbage = setmetatable( {}, { __mode = "k" } )
 local function newtable()
 	local t = next( garbage )
@@ -113,7 +151,6 @@ end
 
 function msp_onevent( this, event, prefix, body, dist, sender )
 	if event == "CHAT_MSG_ADDON" then
-		print(body)
 		if MSP_INCOMING_HANDLER[ prefix ] then
 			MSP_INCOMING_HANDLER[ prefix ]( sender, body )
 		end
@@ -178,7 +215,8 @@ function msp_incoming( sender, body )
 	msp.reply = newtable()
 	if body ~= "" then
 		if strfind( body, FIELD_SEPARATOR, 1, true ) then
-			for chunk in strgmatch( body, "([^" .. FIELD_SEPARATOR .. "]+)"..FIELD_SEPARATOR .. "*" ) do
+			-- Ellypse modification: use strsplit instead of match as the separator is two characters wide
+			for _, chunk in pairs(strsplit(body, FIELD_SEPARATOR)) do
 				msp_incomingchunk( sender, chunk )
 			end
 		else
@@ -195,6 +233,9 @@ end
 function msp_incomingchunk( sender, chunk )
 	local reply = msp.reply
 	local head, field, ver, body = strmatch( chunk, "(%p?)(%a%a)(%d*)=?(.*)" )
+	if body then -- Ellypse modification: un-escape previously escaped body (`|` replaced by `!|`)
+		body = unescapeText(body)
+	end
 	ver = tonumber( ver ) or 0
 	if not field then
 		return
@@ -210,7 +251,7 @@ function msp_incomingchunk( sender, chunk )
 				if not msp.my[ field ] or msp.my[ field ] == "" then
 					tinsert( reply, field .. (msp.myver[ field ] or "") )
 				else
-					tinsert( reply, field .. (msp.myver[ field ] or "") .. "=" .. msp.my[ field ] )
+					tinsert( reply, field .. (msp.myver[ field ] or "") .. "=" .. escapeText( msp.my[ field ]) )
 				end
 			end
 		else
@@ -276,7 +317,7 @@ function msp:Update()
 		if not value or value == "" then
 			tinsert( tt, field .. (msp.myver[ field ] or "") )
 		else
-			tinsert( tt, field .. (msp.myver[ field ] or "") .. "=" .. value )
+			tinsert( tt, field .. (msp.myver[ field ] or "") .. "=" .. escapeText(value) )
 		end
 	end
 	local newtt = tconcat( tt, FIELD_SEPARATOR ) or ""
@@ -328,7 +369,7 @@ function msp:Request( player, fields )
 				if not msp.char[ player ].supported or not msp.char[ player ].ver[ field ] or msp.char[ player ].ver[ field ] == 0 then
 					tinsert( tosend, "?" .. field )
 				else
-					tinsert( tosend, "?" .. field .. tostring( msp.char[ player ].ver[ field ] ) )
+					tinsert( tosend, "?" .. field .. escapeText( tostring( msp.char[ player ].ver[ field ] ) ) )
 				end
 			end
 		end
@@ -351,7 +392,7 @@ end
 function msp:Send( player, chunks )
 	local payload = ""
 	if type( chunks ) == "string" then
-		payload = chunks
+		payload = escapeText( chunks )
 	elseif type( chunks ) == "table" then
 		payload = tconcat( chunks, FIELD_SEPARATOR )
 	end
