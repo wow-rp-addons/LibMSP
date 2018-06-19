@@ -374,7 +374,7 @@ function msp:Request( player, fields )
 			end
 		end
 		if updateneeded then
-			msp:Send( player, tosend )
+			msp:Send( player, tosend, false )
 		end
 		garbage[ tosend ] = true
 		return updateneeded
@@ -382,14 +382,18 @@ function msp:Request( player, fields )
 end
 
 --[[
-	msp:Send( player, chunks )
+	msp:Send( player, chunks, [useLoggedMessages] )
 		player = Player name to send to; if from a different realm, format should be "Name-Realm"
 		chunks = One (string) or more (table) MSP chunks to send
+		useLoggedMessages = Indicate if we should use the logged messages channel, default to true.
 
 	Normally internally used, but published just in case you want to 'push' a field onto someone.
 	Returns the number of messages used to send the data.
 ]]
-function msp:Send( player, chunks )
+function msp:Send( player, chunks, useLoggedMessages )
+	if useLoggedMessages == nil then
+		useLoggedMessages = true
+	end
 	local payload = ""
 	if type( chunks ) == "string" then
 		payload = escapeText( chunks )
@@ -400,24 +404,24 @@ function msp:Send( player, chunks )
 		local len = #payload
 		local queue = "MSPWHISPER" .. player
 		if len < 256 then
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue , nil, nil, true)
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue , nil, nil, useLoggedMessages)
 			return 1
 		else
 			-- If we will be sending more than one message, we insert the number of incoming messages in
 			-- the XC field as the beggining of the payload.
 			payload = format("XC=%d" .. FIELD_SEPARATOR .. "%s", ((#payload + 6) / 255) + 1, payload);
 			local chunk = strsub( payload, 1, 255 )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP1", chunk, "WHISPER", player, queue, nil, nil, true )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP1", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages)
 			local pos = 256
 			local parts = 2
 			while pos + 255 <= len do
 				chunk = strsub( payload, pos, pos + 254 )
-				ChatThrottleLib:SendAddonMessage( "BULK", "MSP2", chunk, "WHISPER", player, queue, nil, nil, true )
+				ChatThrottleLib:SendAddonMessage( "BULK", "MSP2", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages)
 				pos = pos + 255
 				parts = parts + 1
 			end
 			chunk = strsub( payload, pos )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP3", chunk, "WHISPER", player, queue, nil, nil, true )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP3", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages)
 			return parts
 		end
 	end
