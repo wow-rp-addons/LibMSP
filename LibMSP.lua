@@ -445,6 +445,17 @@ function msp:Send( player, chunks, useLoggedMessages )
 	return 0
 end
 
+function msp:AddFieldsToTooltip( fields )
+	if type(fields) == "table" then
+		for _, field in pairs( fields ) do
+			msp:AddFieldsToTooltip( field )
+		end
+	else
+		table.insert( MSP_FIELDS_IN_TT, fields )
+		MSP_TT_FIELD[fields] = true
+	end
+end
+
 --[[
 	WoW 4.0.3.13329: Bug Workaround
 	(Invisible SendAddonMessage() returning visible ERR_CHAT_PLAYER_NOT_FOUND_S system message on failure)
