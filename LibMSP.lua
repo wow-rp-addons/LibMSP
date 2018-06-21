@@ -46,7 +46,7 @@ local msp = _G.msp
 msp.version = libmsp_version
 ---@type ChatThrottleLib
 local ChatThrottleLib = assert(ChatThrottleLibMSP, "LibMSP requires ChatThrottleLibMSP")
-assert(ChatThrottleLib.version >= 25, "LibMSP requires ChatThrottleLib v22 or later")
+assert(ChatThrottleLib.version >= 25, "LibMSP requires ChatThrottleLibMSP v25 or later")
 
 msp.protocolversion = 2
 
@@ -154,10 +154,16 @@ function msp_onevent( this, event, prefix, body, dist, sender )
 		if MSP_INCOMING_HANDLER[ prefix ] then
 			MSP_INCOMING_HANDLER[ prefix ]( sender, body )
 		end
+	-- New event, corresponding to messages sent via SendAddonMessageLogged
+	-- Messages received from this event are logged on Blizzard's servers
+	elseif event == "CHAT_MSG_ADDON_LOGGED" then
+		if MSP_INCOMING_HANDLER[ prefix ] then
+			MSP_INCOMING_HANDLER[ prefix ]( sender, body, true ) -- We pass true here to indicate that we are receiving logged data
+		end
 	end
 end
 
-function msp_incomingfirst( sender, body )
+function msp_incomingfirst( sender, body, isLogged )
 	-- Check if a XC field is provided to indicate the amount of incoming chunks
 	local totalChunks = tonumber(body:match("^XC=(%d+)"..FIELD_SEPARATOR))
 	if totalChunks then
@@ -167,49 +173,60 @@ function msp_incomingfirst( sender, body )
 		body = body:gsub("^XC=%d+"..FIELD_SEPARATOR, "")
 	end
 	msp.char[ sender ].buffer = body
+	-- If we received logged message, we remember that as we will only accept logged messages in the buffer
+	msp.char[ sender ].bufferIsLogged = isLogged
 end
 
-function msp_incomingnext( sender, body )
-	local buf = msp.char[ sender ].buffer
-	if buf then
-		if type( buf ) == "table" then
-			tinsert( buf, body )
-		else
-			local temp = newtable()
-			temp[ 1 ] = buf
-			temp[ 2 ] = body
-			msp.char[ sender ].buffer = temp
+function msp_incomingnext( sender, body, isLogged )
+	-- Protection against sending the first message via SendAddonMessageLogged and then sending non-logged messages.
+	-- If we started the buffer in a logged state, we expect the next messages to be logged too.
+	-- If what we are receiving is not logged, we will not add it to the buffer
+	if not msp.char[ sender ].bufferIsLogged or isLogged then
+		local buf = msp.char[ sender ].buffer
+		if buf then
+			if type( buf ) == "table" then
+				tinsert( buf, body )
+			else
+				local temp = newtable()
+				temp[ 1 ] = buf
+				temp[ 2 ] = body
+				msp.char[ sender ].buffer = temp
+			end
 		end
+	end
 
-		-- If the sender has previously indicated the amount of incoming cunks
-		if msp.char[sender].totalChunks then
-			-- We increment the amount of chunks already received
-			msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].amountOfChunksAlreadyReceived + 1;
-		end
+	-- If the sender has previously indicated the amount of incoming chunks
+	if msp.char[sender].totalChunks then
+		-- We increment the amount of chunks already received
+		msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].amountOfChunksAlreadyReceived + 1;
 	end
 end
 
-function msp_incominglast( sender, body )
-	local buf = msp.char[ sender ].buffer
-	if buf then
-		if type( buf ) == "table" then
-			tinsert( buf, body )
-			msp_incoming( sender, tconcat( buf ) )
-			garbage[ buf ] = true
-		else
-			msp_incoming( sender, buf .. body )
+function msp_incominglast( sender, body, isLogged )
+	-- Protection against sending the first message via SendAddonMessageLogged and then sending non-logged messages.
+	-- If we started the buffer in a logged state, we expect the next messages to be logged too.
+	-- If what we are receiving is not logged, we will not add it to the buffer
+	if not msp.char[ sender ].bufferIsLogged or isLogged then
+		local buf = msp.char[ sender ].buffer
+		if buf then
+			if type( buf ) == "table" then
+				tinsert( buf, body )
+				msp_incoming( sender, tconcat( buf ), isLogged )
+				garbage[ buf ] = true
+			else
+				msp_incoming( sender, buf .. body, isLogged )
+			end
 		end
-
-		-- If the sender has previously indicated the amount of incoming cunks
-		if msp.char[sender].totalChunks then
-			-- Make sure the amountOfChunksAlreadyReceived is equal to totalChunks
-			-- (can be different in really rare occasions)
-			msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].totalChunks;
-		end
+	end
+	-- If the sender has previously indicated the amount of incoming chunks
+	if msp.char[sender].totalChunks then
+		-- Make sure the amountOfChunksAlreadyReceived is equal to totalChunks
+		-- (can be different in really rare occasions)
+		msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].totalChunks;
 	end
 end
 
-function msp_incoming( sender, body )
+function msp_incoming( sender, body, isLogged )
 	msp.char[ sender ].supported = true
 	msp.char[ sender ].scantime = nil
 	msp.reply = newtable()
@@ -217,10 +234,10 @@ function msp_incoming( sender, body )
 		if strfind( body, FIELD_SEPARATOR, 1, true ) then
 			-- Ellypse modification: use strsplit instead of match as the separator is two characters wide
 			for _, chunk in pairs(strsplit(body, FIELD_SEPARATOR)) do
-				msp_incomingchunk( sender, chunk )
+				msp_incomingchunk( sender, chunk, isLogged )
 			end
 		else
-			msp_incomingchunk( sender, body )
+			msp_incomingchunk( sender, body, isLogged )
 		end
 	end
 	for k, v in ipairs( msp.callback.received ) do
@@ -230,7 +247,7 @@ function msp_incoming( sender, body )
 	garbage[ msp.reply ] = true
 end
 
-function msp_incomingchunk( sender, chunk )
+function msp_incomingchunk( sender, chunk, isLogged )
 	local reply = msp.reply
 	local head, field, ver, body = strmatch( chunk, "(%p?)(%a%a)(%d*)=?(.*)" )
 	if body then -- Ellypse modification: un-escape previously escaped body (`|` replaced by `!|`)
@@ -260,7 +277,9 @@ function msp_incomingchunk( sender, chunk )
 	elseif head == "!" then
 		msp.char[ sender ].ver[ field ] = ver
 		msp.char[ sender ].time[ field ] = GetTime()
-	elseif head == "" then
+
+	-- We only accept profile data if the messages were sent via SendAddonMessageLogged and received via the CHAT_MSG_ADDON_LOGGED event
+	elseif isLogged and head == "" then
 		msp.char[ sender ].ver[ field ] = ver
 		msp.char[ sender ].time[ field ] = GetTime()
 		msp.char[ sender ].field[ field ] = body or ""
@@ -277,13 +296,10 @@ MSP_INCOMING_HANDLER = {
 msp.dummyframe = msp.dummyframe or CreateFrame( "Frame", "libmspDummyFrame" )
 msp.dummyframe:SetScript( "OnEvent", msp_onevent )
 msp.dummyframe:RegisterEvent( "CHAT_MSG_ADDON" )
+msp.dummyframe:RegisterEvent( "CHAT_MSG_ADDON_LOGGED" )
 
 for prefix, handler in pairs( MSP_INCOMING_HANDLER ) do
-	if C_ChatInfo then
-		C_ChatInfo.RegisterAddonMessagePrefix( prefix )
-	else
-		RegisterAddonMessagePrefix( prefix )
-	end
+	C_ChatInfo.RegisterAddonMessagePrefix( prefix )
 end
 
 --[[
@@ -374,6 +390,7 @@ function msp:Request( player, fields )
 			end
 		end
 		if updateneeded then
+			-- We pass false for useLoggedMessages here as requests doesn't have a user generated body, so we don't need them to be logged
 			msp:Send( player, tosend, false )
 		end
 		garbage[ tosend ] = true
