@@ -29,7 +29,7 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local libmsp_version = 8
+local libmsp_version = 9
 
 if msp then
 	if msp.version >= libmsp_version then
@@ -40,10 +40,10 @@ else
 end
 local msp = _G.msp
 msp.version = libmsp_version
-assert(ChatThrottleLib.version >= 22, "LibMSP requires ChatThrottleLib v22 or later")
 local ChatThrottleLib = assert(ChatThrottleLibMSP, "LibMSP requires ChatThrottleLibMSP")
+assert(ChatThrottleLib.version >= 25, "LibMSP requires ChatThrottleLibMSP v25 or later")
 
-msp.protocolversion = 1
+msp.protocolversion = 2
 
 msp.callback = {
 	received = {}
@@ -93,6 +93,46 @@ local MSP_TT_FIELD = { VP=true, VA=true, NA=true, NH=true, NI=true, NT=true, RA=
 MSP_PROBE_FREQUENCY = 300.0 + math.random(0, 60) -- Wait 5-6 minutes for someone to respond before asking again
 MSP_FIELD_UPDATE_FREQUENCY = 10.0 + math.random(0, 5) -- Fields newer than 10-15 seconds old are still fresh
 
+-- Ellypse modifications:
+-- With the move to SendAddonMessageLogged, the separator has to be a printable character
+-- Using a two characters length separator is necessary for properly escaping the separator from the user inputted text
+-- The separator will actually be ~~ and every ~ in the body of the fields will be replace by !~ before being sent
+local SEPARATOR_CHARACTER = "~"
+local ESCAPING_CHARACTER = "!"
+local FIELD_SEPARATOR = SEPARATOR_CHARACTER .. SEPARATOR_CHARACTER
+local ESCAPED_SEPARATOR = ESCAPING_CHARACTER .. SEPARATOR_CHARACTER
+
+-- Escape the given text, replacing all instances of SEPARATOR_CHARACTER by ESCAPED_SEPARATOR
+local function escapeText(text)
+	return text:gsub(SEPARATOR_CHARACTER, ESCAPED_SEPARATOR)
+end
+
+-- Un-escape the given text, replacing all instances of ESCAPED_SEPARATOR by SEPARATOR_CHARACTER
+local function unescapeText(text)
+	return text:gsub(ESCAPED_SEPARATOR, SEPARATOR_CHARACTER)
+end
+
+-- Split a string into a table of strings using a given separator
+local function strsplit(text, separator)
+
+	local t = {}
+	local fpat = "(.-)" .. separator
+	local last_end = 1
+	local s, e, cap = text:find(fpat, 1)
+	while s do
+		if s ~= 1 or cap ~= "" then
+			table.insert(t,cap)
+		end
+		last_end = e+1
+		s, e, cap = text:find(fpat, last_end)
+	end
+	if last_end <= #text then
+		cap = text:sub(last_end)
+		table.insert(t, cap)
+	end
+	return t
+end
+
 local garbage = setmetatable( {}, { __mode = "k" } )
 local function newtable()
 	local t = next( garbage )
@@ -108,52 +148,91 @@ function msp_onevent( this, event, prefix, body, dist, sender )
 		if MSP_INCOMING_HANDLER[ prefix ] then
 			MSP_INCOMING_HANDLER[ prefix ]( sender, body )
 		end
+		-- New event, corresponding to messages sent via SendAddonMessageLogged
+		-- Messages received from this event are logged on Blizzard's servers
+	elseif event == "CHAT_MSG_ADDON_LOGGED" then
+		if MSP_INCOMING_HANDLER[ prefix ] then
+			MSP_INCOMING_HANDLER[ prefix ]( sender, body, true ) -- We pass true here to indicate that we are receiving logged data
+		end
 	end
 end
 
-function msp_incomingfirst( sender, body )
+function msp_incomingfirst( sender, body, isLogged )
+	-- Check if a XC field is provided to indicate the amount of incoming chunks
+	local totalChunks = tonumber(body:match("^XC=(%d+)"..FIELD_SEPARATOR))
+	if totalChunks then
+		msp.char[sender].totalChunks = totalChunks
+		msp.char[sender].amountOfChunksAlreadyReceived = 1
+		-- We can remove the XC field as it is not a profile info
+		body = body:gsub("^XC=%d+"..FIELD_SEPARATOR, "")
+	end
 	msp.char[ sender ].buffer = body
+	-- If we received logged message, we remember that as we will only accept logged messages in the buffer
+	msp.char[ sender ].bufferIsLogged = isLogged
 end
 
-function msp_incomingnext( sender, body )
-	local buf = msp.char[ sender ].buffer
-	if buf then
-		if type( buf ) == "table" then
-			tinsert( buf, body )
-		else
-			local temp = newtable()
-			temp[ 1 ] = buf
-			temp[ 2 ] = body
-			msp.char[ sender ].buffer = temp
+function msp_incomingnext( sender, body, isLogged )
+	-- Protection against sending the first message via SendAddonMessageLogged and then sending non-logged messages.
+	-- If we started the buffer in a logged state, we expect the next messages to be logged too.
+	-- If what we are receiving is not logged, we will not add it to the buffer
+	if not msp.char[ sender ].bufferIsLogged or isLogged then
+		local buf = msp.char[ sender ].buffer
+		if buf then
+			if type( buf ) == "table" then
+				tinsert( buf, body )
+			else
+				local temp = newtable()
+				temp[ 1 ] = buf
+				temp[ 2 ] = body
+				msp.char[ sender ].buffer = temp
+			end
 		end
+	end
+
+	-- If the sender has previously indicated the amount of incoming chunks
+	if msp.char[sender].totalChunks then
+		-- We increment the amount of chunks already received
+		msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].amountOfChunksAlreadyReceived + 1;
 	end
 end
 
 function msp_incominglast( sender, body )
-	local buf = msp.char[ sender ].buffer
-	if buf then
-		if type( buf ) == "table" then
-			tinsert( buf, body )
-			msp_incoming( sender, tconcat( buf ) )
-			garbage[ buf ] = true
-		else
-			msp_incoming( sender, buf .. body )
+	-- Protection against sending the first message via SendAddonMessageLogged and then sending non-logged messages.
+	-- If we started the buffer in a logged state, we expect the next messages to be logged too.
+	-- If what we are receiving is not logged, we will not add it to the buffer
+	if not msp.char[ sender ].bufferIsLogged or isLogged then
+		local buf = msp.char[ sender ].buffer
+		if buf then
+			if type( buf ) == "table" then
+				tinsert( buf, body )
+				msp_incoming( sender, tconcat( buf ), isLogged )
+				garbage[ buf ] = true
+			else
+				msp_incoming( sender, buf .. body, isLogged )
+			end
 		end
+	end
+	-- If the sender has previously indicated the amount of incoming chunks
+	if msp.char[sender].totalChunks then
+		-- Make sure the amountOfChunksAlreadyReceived is equal to totalChunks
+		-- (can be different in really rare occasions)
+		msp.char[sender].amountOfChunksAlreadyReceived = msp.char[sender].totalChunks;
 	end
 end
 
-function msp_incoming( sender, body )
-	msp:DebugSpam( "<%s:%s", sender, string.gsub(body,"\1","|cff808080:|r") or "" )
+function msp_incoming( sender, body, isLogged )
+	msp:DebugSpam( "<%s:%s", sender, string.gsub(body, FIELD_SEPARATOR,"|cff808080:|r") or "" )
 	msp.char[ sender ].supported = true
 	msp.char[ sender ].scantime = nil
 	msp.reply = newtable()
 	if body ~= "" then
-		if strfind( body, "\1", 1, true ) then
-			for chunk in strgmatch( body, "([^\1]+)\1*" ) do
-				msp_incomingchunk( sender, chunk )
+		if strfind( body, FIELD_SEPARATOR, 1, true ) then
+			-- Ellypse modification: use strsplit instead of match as the separator is two characters wide
+			for _, chunk in pairs(strsplit(body, FIELD_SEPARATOR)) do
+				msp_incomingchunk( sender, chunk, isLogged )
 			end
 		else
-			msp_incomingchunk( sender, body )
+			msp_incomingchunk( sender, body, isLogged )
 		end
 	end
 	for k, v in ipairs( msp.callback.received ) do
@@ -164,9 +243,12 @@ function msp_incoming( sender, body )
 	garbage[ msp.reply ] = true
 end
 
-function msp_incomingchunk( sender, chunk )
+function msp_incomingchunk( sender, chunk, isLogged )
 	local reply = msp.reply
 	local head, field, ver, body = strmatch( chunk, "(%p?)(%a%a)(%d*)=?(.*)" )
+	if body then -- Ellypse modification: un-escape previously escaped body (`|` replaced by `!|`)
+		body = unescapeText(body)
+	end
 	ver = tonumber( ver ) or 0
 	if not field then
 		return
@@ -182,7 +264,7 @@ function msp_incomingchunk( sender, chunk )
 				if not msp.my[ field ] or msp.my[ field ] == "" then
 					tinsert( reply, field .. (msp.myver[ field ] or "") )
 				else
-					tinsert( reply, field .. (msp.myver[ field ] or "") .. "=" .. msp.my[ field ] )
+					tinsert( reply, field .. (msp.myver[ field ] or "") .. "=" .. escapeText(msp.my[ field ]) )
 				end
 			end
 		else
@@ -191,7 +273,8 @@ function msp_incomingchunk( sender, chunk )
 	elseif head == "!" then
 		msp.char[ sender ].ver[ field ] = ver
 		msp.char[ sender ].time[ field ] = GetTime()
-	elseif head == "" then
+		-- We only accept profile data if the messages were sent via SendAddonMessageLogged and received via the CHAT_MSG_ADDON_LOGGED event
+	elseif isLogged and head == "" then
 		msp.char[ sender ].ver[ field ] = ver
 		msp.char[ sender ].time[ field ] = GetTime()
 		msp.char[ sender ].field[ field ] = body or ""
@@ -200,17 +283,18 @@ end
 
 MSP_INCOMING_HANDLER = {
 	["MSP"] = msp_incoming,
-	["MSP\1"] = msp_incomingfirst,
-	["MSP\2"] = msp_incomingnext,
-	["MSP\3"] = msp_incominglast
+	["MSP1"] = msp_incomingfirst,
+	["MSP2"] = msp_incomingnext,
+	["MSP3"] = msp_incominglast
 }
 
 msp.dummyframe = msp.dummyframe or CreateFrame( "Frame", "libmspDummyFrame" )
 msp.dummyframe:SetScript( "OnEvent", msp_onevent )
 msp.dummyframe:RegisterEvent( "CHAT_MSG_ADDON" )
+msp.dummyframe:RegisterEvent( "CHAT_MSG_ADDON_LOGGED" )
 
 for prefix, handler in pairs( MSP_INCOMING_HANDLER ) do
-	RegisterAddonMessagePrefix( prefix )
+	C_ChatInfo.RegisterAddonMessagePrefix( prefix )
 end
 
 --[[
@@ -244,13 +328,13 @@ function msp:Update()
 		if not value or value == "" then
 			tinsert( tt, field .. (msp.myver[ field ] or "") )
 		else
-			tinsert( tt, field .. (msp.myver[ field ] or "") .. "=" .. value )
+			tinsert( tt, field .. (msp.myver[ field ] or "") .. "=" .. escapeText(value) )
 		end
 	end
-	local newtt = tconcat( tt, "\1" ) or ""
-	if msp_tt_cache ~= newtt.."\1TT"..(msp.myver.TT or 0) then
+	local newtt = tconcat( tt, FIELD_SEPARATOR ) or ""
+	if msp_tt_cache ~= newtt..FIELD_SEPARATOR.."TT"..(msp.myver.TT or 0) then
 		msp.myver.TT = (msp.myver.TT or 0) + 1
-		msp_tt_cache = newtt.."\1TT"..msp.myver.TT
+		msp_tt_cache = newtt..FIELD_SEPARATOR.."TT"..msp.myver.TT
 	end
 	garbage[ tt ] = true
 	msp:DebugSpam( updated and "msp:Update(): updated" or "msp:Update(): not updated" )
@@ -299,7 +383,7 @@ function msp:Request( player, fields )
 				if not msp.char[ player ].supported or not msp.char[ player ].ver[ field ] or msp.char[ player ].ver[ field ] == 0 then
 					tinsert( tosend, "?" .. field )
 				else
-					tinsert( tosend, "?" .. field .. tostring( msp.char[ player ].ver[ field ] ) )
+					tinsert( tosend, "?" .. field .. escapeText( tostring( msp.char[ player ].ver[ field ] ) ) )
 				end
 			else
 				tinsert( todump, "|cff00ee00"..field.."|r" )
@@ -307,7 +391,8 @@ function msp:Request( player, fields )
 		end
 		msp:DebugSpam( ">%s:|cff00aaaa?%s", player, tconcat(todump, ", ") )
 		if updateneeded then
-			msp:Send( player, tosend )
+			-- We pass false for useLoggedMessages here as requests doesn't have a user generated body, so we don't need them to be logged
+			msp:Send( player, tosend, false )
 		end
 		garbage[ tosend ] = true
 		garbage[ todump ] = true
@@ -323,36 +408,42 @@ end
 	Normally internally used, but published just in case you want to 'push' a field onto someone.
 	Returns the number of messages used to send the data.
 ]]
-function msp:Send( player, chunks )
+function msp:Send( player, chunks, useLoggedMessages )
+	if useLoggedMessages == nil then
+		useLoggedMessages = true
+	end
 	local payload = ""
 	if type( chunks ) == "string" then
 		payload = chunks
 	elseif type( chunks ) == "table" then
-		payload = tconcat( chunks, "\1" )
+		payload = tconcat( chunks, FIELD_SEPARATOR )
 	end
 	if payload ~= "" then
 		local len = #payload
 		local queue = "MSPWHISPER" .. player
 		if len < 256 then
 			msp:DeepDebugSpam( ">%s:[%s](%d)", player, payload, #payload )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP", payload, "WHISPER", player, queue, nil, nil, useLoggedMessages )
 			return 1
 		else
+			-- If we will be sending more than one message, we insert the number of incoming messages in
+			-- the XC field as the beggining of the payload.
+			payload = format("XC=%d" .. FIELD_SEPARATOR .. "%s", ((#payload + 6) / 255) + 1, payload);
 			local chunk = strsub( payload, 1, 255 )
 			msp:DeepDebugSpam( ">%s:[%s]…(%d/%d)", player, chunk, #chunk, #payload )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\1", chunk, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP1", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages )
 			local pos = 256
 			local parts = 2
 			while pos + 255 <= len do
 				chunk = strsub( payload, pos, pos + 254 )
 				msp:DeepDebugSpam( ">%s:…[%s]…(%d/%d)", player, chunk, #chunk, #payload )
-				ChatThrottleLib:SendAddonMessage( "BULK", "MSP\2", chunk, "WHISPER", player, queue )
+				ChatThrottleLib:SendAddonMessage( "BULK", "MSP2", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages )
 				pos = pos + 255
 				parts = parts + 1
 			end
 			chunk = strsub( payload, pos )
 			msp:DeepDebugSpam( ">%s:…[%s](%d/%d)", player, chunk, #chunk, #payload )
-			ChatThrottleLib:SendAddonMessage( "BULK", "MSP\3", chunk, "WHISPER", player, queue )
+			ChatThrottleLib:SendAddonMessage( "BULK", "MSP3", chunk, "WHISPER", player, queue, nil, nil, useLoggedMessages )
 			return parts
 		end
 	end
