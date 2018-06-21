@@ -45,7 +45,7 @@ end
 local msp = _G.msp
 msp.version = libmsp_version
 ---@type ChatThrottleLib
-local ChatThrottleLib = assert(ChatThrottleLib, "LibMSP requires ChatThrottleLib")
+local ChatThrottleLib = assert(ChatThrottleLibMSP, "LibMSP requires ChatThrottleLibMSP")
 assert(ChatThrottleLib.version >= 25, "LibMSP requires ChatThrottleLib v22 or later")
 
 msp.protocolversion = 2

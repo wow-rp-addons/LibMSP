@@ -23,34 +23,30 @@
 -- LICENSE: ChatThrottleLib is released into the Public Domain
 --
 
+
+-- IMPORTANT: THIS IS A MODIFIED VERSION OF THE ChatThrottleLib WITH EDITS TO SUPPORT THE SendAddonMessageLogged FUNCTION
+-- 			  AS A RESULT, THIS SPECIFIC INSTANCE IS DECLARED AS ChatThrottleLibMSP IN THE GLOBAL NAMESPACE, TO AVOID CONFLICTS
+--
+-- Ellypse, <ellypse@totalrp3.info> @EllypseCelwe
+
 local CTL_VERSION = 25
 
 local _G = _G
 
-if _G.ChatThrottleLib then
-	if _G.ChatThrottleLib.version >= CTL_VERSION then
+if _G.ChatThrottleLibMSP then
+	if _G.ChatThrottleLibMSP.version >= CTL_VERSION then
 		-- There's already a newer (or same) version loaded. Buh-bye.
 		return
-	elseif not _G.ChatThrottleLib.securelyHooked then
-		print("ChatThrottleLib: Warning: There's an ANCIENT ChatThrottleLib.lua (pre-wow 2.0, <v16) in an addon somewhere. Get the addon updated or copy in a newer ChatThrottleLib.lua (>=v16) in it!")
-		-- ATTEMPT to unhook; this'll behave badly if someone else has hooked...
-		-- ... and if someone has securehooked, they can kiss that goodbye too... >.<
-		_G.SendChatMessage = _G.ChatThrottleLib.ORIG_SendChatMessage
-		if _G.ChatThrottleLib.ORIG_SendAddonMessage then
-			_G.SendAddonMessage = _G.ChatThrottleLib.ORIG_SendAddonMessage
-		end
 	end
-	_G.ChatThrottleLib.ORIG_SendChatMessage = nil
-	_G.ChatThrottleLib.ORIG_SendAddonMessage = nil
 end
 
-if not _G.ChatThrottleLib then
-	_G.ChatThrottleLib = {}
+if not _G.ChatThrottleLibMSP then
+	_G.ChatThrottleLibMSP = {}
 end
 
-ChatThrottleLib = _G.ChatThrottleLib  -- in case some addon does "local ChatThrottleLib" above us and we're copypasted (AceComm-2, sigh)
----@class ChatThrottleLib
-local ChatThrottleLib = _G.ChatThrottleLib
+ChatThrottleLibMSP = _G.ChatThrottleLibMSP  -- in case some addon does "local ChatThrottleLib" above us and we're copypasted (AceComm-2, sigh)
+---@class ChatThrottleLibMSP
+local ChatThrottleLib = _G.ChatThrottleLibMSP
 
 ChatThrottleLib.version = CTL_VERSION
 
