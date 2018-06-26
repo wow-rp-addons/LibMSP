@@ -32,22 +32,41 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local LIBMSP_VERSION = 9
+local VERSION = 9
+local PROTOCOL_VERSION = 3
+local CHOMP_VERSION = 0
 
-assert(AddOn_Chomp and AddOn_Chomp.GetVersion() >= 0, "LibMSP requires Chomp v0 or later.")
+assert(not IsLoggedIn(), ("LibMSP (embedded: %s) cannot be loaded after login."):format((...)))
+if msp and (msp.version or 0) >= VERSION then return end
+assert(AddOn_Chomp and AddOn_Chomp.GetVersion() >= CHOMP_VERSION, "LibMSP requires Chomp v0 or later.")
 
-if msp and (msp.version or 0) >= LIBMSP_VERSION then
-	return
-elseif not msp then
+local PREFIX_UNICAST = "MSP"
+local SEPARATOR = string.char(0x7f)
+
+local TT_ALONE = { "TT" }
+local PROBE_FREQUENCY = 120
+local FIELD_FREQUENCY = 15
+
+local LONG_FIELD = { DE = true, HI = true }
+local RUNTIME_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, VA = true }
+
+local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
+local TT_ALL_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC", "RC", "CO", "IC" }
+
+if not msp then
 	msp = {
 		callback = {
 			received = {},
 			updated = {},
+			status = {},
 		},
 	}
 else
 	if not msp.callback.updated then
 		msp.callback.updated = {}
+	end
+	if not msp.callback.status then
+		msp.callback.status = {}
 	end
 end
 if msp.dummyframe then
@@ -59,21 +78,7 @@ msp.dummyframe = {
 	UnregisterEvent = function() end,
 }
 
-msp.version = LIBMSP_VERSION
-
--- Protocol version >= 2 indicates support for MSP-over-Battle.net. It also
--- includes MSP-over-group, but that requires a new prefix registered, so the
--- protocol version isn't the real indicator there (meaning, yes, you can do
--- version <= 1 with no Battle.net or version >= 2 with no group).
-msp.protocolversion = 2
-
--- Set this before running msp:Update() to change the first-run version update
--- behaviour. Using 2 is recommended and generally safe.
---	- 0: Increment all field versions by 1 (LibMSP behaviour).
---	- 1: Increment all field versions by 1, except DE and HI.
---	- 2: Only incrememnt runtime field versions (GC, GF, GR, GS, GU, TT, VA).
---	- 3: Do not increment any field versions.
-msp.versionUpdate = 2
+msp.version = VERSION
 
 -- Realm part matching is greedy, as realm names will rarely have dashes, but
 -- player names will never.
@@ -128,17 +133,13 @@ msp.char = setmetatable({}, {
 	end,
 })
 
+msp.protocolversion = PROTOCOL_VERSION
+
 msp.my = {}
 msp.myver = {}
 msp.my.VP = tostring(msp.protocolversion)
 
 local playerOwnName = NameMergedRealm(UnitName("player"))
-
-local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
-local TT_FIELDS = {
-	VP = true, VA = true, NA = true, NH = true, NI = true, NT = true, RA = true,
-	RC = true, FR = true, FC = true, CU = true, CO = true, IC = true,
-}
 
 local function AddTTField(field)
 	if type(field) ~= "string" then
@@ -161,11 +162,36 @@ function msp:AddFieldsToTooltip(fields)
 	end
 end
 
-function msp:SetLoggedOnly(loggedOnly)
-	self.loggedOnly = loggedOnly
+msp.versionUpdate = 2
+
+-- Use this before running msp:Update() to change the first-run version update
+-- behaviour. Using 2 is recommended and generally safe.
+--	- ALL: Increment all field versions by 1 (LibMSP behaviour).
+--	- SHORT: Increment all field versions by 1, except DE and HI.
+--	- RUNTIME: Only incrememnt runtime field versions (GC, GF, GR, GS, GU, TT, VA).
+--	- NONE: Do not increment any field versions.
+function msp:SetInitialVersionUpdate(method)
+	if method == "ALL" then
+		self.versionUpdate = 0
+	elseif method == "SHORT" then
+		self.versionUpdate = 1
+	elseif method == "RUNTIME" then
+		self.versionUpdate = 2
+	elseif method == "NONE" then
+		self.versionUpdate = 3
+	else
+		error("msp:SetInitialVersionUpdate(): method: method must be one of \"ALL\", \"SHORT\", \"RUNTIME\", or \"NONE\".", 2)
+	end
 end
 
-local handlers, ttCache
+-- Stub functions for future use.
+function msp:SetSaveContents(saveContents)
+	error("Function unimplemented.", 2)
+end
+
+function msp:LoadCache(cacheTable)
+	error("Function unimplemented.", 2)
+end
 
 local requestTime = setmetatable({}, {
 	__index = function(self, name)
@@ -175,9 +201,24 @@ local requestTime = setmetatable({}, {
 	__mode = "v",
 })
 
-local function Process(self, name, command)
-	local action, field, version, contents = command:match("(%p?)(%u%u)(%d*)=?(.*)")
-	version = tonumber(version) or 0
+local function UnicastSend(name, chunks, isRequest)
+	local payload
+	if type(chunks) == "string" then
+		payload = chunks
+	elseif type(chunks) == "table" then
+		payload = table.concat(chunks, SEPARATOR)
+	else
+		return 0
+	end
+	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, isRequest and "MEDIUM" or "LOW", "MSP-" .. name)
+	return math.ceil(#payload / 255)
+end
+
+local ttCache
+local Process
+function Process(name, command)
+	local action, field, version, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
+	version = tonumber(version, 16) or 0
 	if not field then return end
 	if action == "?" then
 		local now = GetTime()
@@ -186,60 +227,88 @@ local function Process(self, name, command)
 			return
 		end
 		requestTime[name][field] = now + 5
-		if not self.reply then
-			self.reply = {}
+		if not msp.reply then
+			msp.reply = {}
 		end
-		local reply = self.reply
-		if version == 0 or version ~= (self.myver[field] or 0) then
+		local reply = msp.reply
+		if version == 0 or version ~= (msp.myver[field] or 0) then
 			if field == "TT" then
 				if not ttCache then
-					self:Update()
+					msp:Update()
 				end
 				reply[#reply + 1] = ttCache
-			elseif not self.my[field] or self.my[field] == "" then
+			elseif not msp.my[field] or msp.my[field] == "" then
 				reply[#reply + 1] = field
 			else
-				reply[#reply + 1] = ("%s%.0f=%s"):format(field, self.myver[field], self.my[field])
+				reply[#reply + 1] = ("%s%X=%s"):format(field, msp.myver[field], msp.my[field])
 			end
 		else
-			reply[#reply + 1] = ("!%s%.0f"):format(field, self.myver[field])
+			reply[#reply + 1] = ("!%s%X"):format(field, msp.myver[field])
 		end
-	elseif action == "!" and version == (self.char[name].ver[field] or 0) then
-		self.char[name].time[field] = GetTime()
+	elseif action == "!" and version == (msp.char[name].ver[field] or 0) then
+		msp.char[name].time[field] = GetTime()
 	elseif action == "" then
-		-- If the message was only partly received, don't update TT
-		-- versioning -- we may have missed some of it.
-		if field == "TT" and self.char[name].buffer.partialMessage then
-			return
-		end
-		self.char[name].ver[field] = version
-		self.char[name].time[field] = GetTime()
-		self.char[name].field[field] = contents
-		if field == "VP" then
+		local now = GetTime()
+		msp.char[name].ver[field] = version
+		msp.char[name].time[field] = now
+		msp.char[name].field[field] = contents
+		if field == "TT" then
+			for i, field in ipairs(TT_ALL_LIST) do
+				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
+				-- but should have been sent with a tooltip (if they're used by
+				-- the opposing addon).
+				if msp.char[name].time[field] < now - PROBE_FREQUENCY then
+					Process(name, field)
+				end
+			end
+		elseif field == "VP" then
 			local VP = tonumber(contents)
 			if VP then
-				self.char[name].bnet = VP >= 2
+				msp.char[name].bnet = VP >= 2
 			end
 		end
 		if field then
-			for i, func in ipairs(self.callback.updated) do
+			for i, func in ipairs(msp.callback.updated) do
 				xpcall(func, geterrorhandler(), name, field, contents)
 			end
 		end
-		return field, contents
 	end
 end
 
-handlers = {
-	["MSP"] = function(self, name, message, channel)
-		if message:find("\001", nil, true) then
-			for command in message:gmatch("([^\001]+)\001*") do
-				local field, contents = Process(self, name, command)
+local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
+local function HandleMessage(method, name, message, sessionID, isComplete)
+	local hasEndOfCommand = message:find(SEPARATOR, nil, true)
+	local buffer = msp.char[name].buffer[sessionID or 0]
+	if isComplete or hasEndOfCommand then
+		if buffer then
+			if type(buffer) == "string" then
+				message = buffer .. message
+			else
+				buffer[#buffer + 1] = message
+				message = table.concat(buffer)
 			end
-		else
-			local field, contents = Process(self, name, message)
+			msp.char[name].buffer[sessionID] = nil
 		end
-		for i, func in ipairs(self.callback.received) do
+		if not hasEndOfCommand then
+			Process(name, message)
+		else
+			for command in message:gmatch(PROCESS_GMATCH) do
+				if isComplete or command:find("^[^%?]") then
+					Process(name, command)
+					if not isComplete then
+						message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
+					end
+				end
+			end
+		end
+	end
+	if isComplete then
+		if msp.reply then
+			local reply = msp.reply
+			msp.reply = nil
+			UnicastSend(name, reply, false)
+		end
+		for i, func in ipairs(msp.callback.received) do
 			xpcall(func, geterrorhandler(), name)
 			local ambiguated = Ambiguate(name, "none")
 			if ambiguated ~= name then
@@ -248,76 +317,44 @@ handlers = {
 				xpcall(func, geterrorhandler(), ambiguated)
 			end
 		end
-		if self.reply then
-		self:Send(name, self.reply, false)
-			self.reply = nil
-		end
-	end,
-	["MSP\001"] = function(self, name, message, channel)
-		-- This drops chunk metadata.
-		self.char[name].buffer[channel] = message:gsub("^XC=%d+\001", "")
-	end,
-	["MSP\002"] = function(self, name, message, channel)
-		local buffer = self.char[name].buffer[channel]
-		if not buffer then
-			message = message:match(".-\001(.+)$")
-			if not message then return end
-			buffer = { "", partial = true }
-		end
-		if type(buffer) == "table" then
-			buffer[#buffer + 1] = message
+	elseif buffer then
+		if type(buffer) == "string" then
+			msp.char[name].buffer[sessionID] = { buffer, message }
 		else
-			self.char[name].buffer[channel] = { buffer, message }
-		end
-	end,
-	["MSP\003"] = function(self, name, message, channel)
-		local buffer = self.char[name].buffer[channel]
-		if not buffer then
-			message = message:match(".-\001(.+)$")
-			if not message then return end
-			buffer = ""
-			self.char[name].buffer.partialMessage = true
-		end
-		if type(buffer) == "table" then
-			if buffer.partial then
-				self.char[name].buffer.partialMessage = true
-			end
 			buffer[#buffer + 1] = message
-			handlers["MSP"](self, name, table.concat(buffer))
-		else
-			handlers["MSP"](self, name, buffer .. message)
 		end
-		self.char[name].buffer[channel] = nil
-		self.char[name].buffer.partialMessage = nil
-	end,
-}
-
-local function Chomp_Callback(prefix, body, channel, sender)
-	if msp.loggedOnly then
-		local method = channel:match("%:(%u+)$")
-		if not method or method ~= "BATTLENET" or method ~= "LOGGED" then
-			return
-		end
+	else
+		msp.char[name].buffer[sessionID] = message
 	end
-	if not handlers[prefix] then return end
-	local name = NameMergedRealm(sender)
-	if name == playerOwnName then return end
-	msp.char[name].supported = true
-	msp.char[name].scantime = nil
-	handlers[prefix](msp, name, body, channel)
 end
 
-local PREFIX = { [0] = 
-	"MSP",
-	"MSP\001",
-	"MSP\002",
-	"MSP\003",
-}
+local function Chomp_Unicast(...)
+	local prefix, message, channel, sender = ...
+	local sessionID, msgID, msgTotal = select(13, ...)
+	local name = NameMergedRealm(sender)
+	msp.char[name].supported = true
+	msp.char[name].scantime = nil
+	HandleMessage("UNICAST", name, message, sessionID, msgID == msgTotal)
 
-AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback)
+	-- Inform status handlers of the message.
+	for i, func in ipairs(self.callback.status) do
+		xpcall(func, geterrorhandler(), name, "MESSAGE", msgID, msgTotal)
+	end
+end
 
-local LONG_FIELD = { DE = true, HI = true }
-local RUNTIME_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, VA = true }
+AddOn_Chomp.RegisterAddonPrefix(PREFIX_UNICAST, Chomp_Unicast, {
+	needBuffer = true,
+	permitBattleNet = true,
+	permitLogged = true,
+	permitUnlogged = false,
+})
+
+local function Chomp_Error(name)
+	for i, func in ipairs(self.callback.status) do
+		xpcall(func, geterrorhandler(), name, "ERROR")
+	end
+end
+
 local myPrevious = {}
 function msp:Update()
 	local updated, firstUpdate = false, self.versionUpdate ~= 0 and next(myPrevious) == nil
@@ -330,7 +367,10 @@ function msp:Update()
 		end
 	end
 	for field, contents in pairs(self.my) do
-		if (myPrevious[field] or "") ~= contents then
+		if contents:find(SEPARATOR, nil, true) then
+			self.my[field] = myPrevious[field]
+			geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
+		elseif (myPrevious[field] or "") ~= contents then
 			updated = true
 			myPrevious[field] = contents or ""
 			if field == "VP" then
@@ -349,20 +389,17 @@ function msp:Update()
 		if not contents or contents == "" then
 			tt[#tt + 1] = field
 		else
-		tt[#tt + 1] = ("%s%.0f=%s"):format(field, self.myver[field], contents)
+		tt[#tt + 1] = ("%s%X=%s"):format(field, self.myver[field], contents)
 		end
 	end
-	local newtt = table.concat(tt, "\001") or ""
-	if (not firstUpdate or self.versionUpdate ~= 3) and ttCache ~= ("%s\001TT%.0f"):format(newtt, (self.myver.TT or 0)) then
+	local newtt = table.concat(tt, SEPARATOR) or ""
+	if (not firstUpdate or self.versionUpdate ~= 3) and ttCache ~= ("%s%sTT%X"):format(newtt, SEPARATOR, (self.myver.TT or 0)) then
 		self.myver.TT = (self.myver.TT or 0) + 1
-		ttCache = ("%s\001TT%.0f"):format(newtt, self.myver.TT)
+		ttCache = ("%s%sTT%X"):format(newtt, SEPARATOR, self.myver.TT)
 	end
 	return updated
 end
 
-local TT_ALONE = { "TT" }
-local PROBE_FREQUENCY = 120
-local FIELD_FREQUENCY = 15
 function msp:Request(name, fields)
 	if name:match("^([^%-]+)") == UNKNOWN then
 		return false
@@ -386,7 +423,7 @@ function msp:Request(name, fields)
 			if not self.char[name].supported or not self.char[name].ver[field] or self.char[name].ver[field] == 0 then
 				toSend[#toSend + 1] = "?" .. field
 			else
-				toSend[#toSend + 1] = ("?%s%.0f"):format(field, self.char[name].ver[field])
+				toSend[#toSend + 1] = ("?%s%X"):format(field, self.char[name].ver[field])
 			end
 			-- Marking time here prevents rapid re-requesting. Also done in
 			-- receive.
@@ -394,25 +431,16 @@ function msp:Request(name, fields)
 		end
 	end
 	if #toSend > 0 then
-		self:Send(name, toSend, true)
+		UnicastSend(name, toSend, true)
 		return true
 	end
 	return false
 end
 
-function msp:Send(name, chunks, isRequest)
-	local payload = table.concat(chunks, "\001")
-	-- Guess six added characters from metadata.
-	local numChunks = ((#payload + 6) / 255) + 1
-	payload = ("XC=%d\001%s"):format(numChunks, payload)
-	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonWhisper(PREFIX, payload, name, isRequest and "HIGH" or "LOW", "MSP-" .. name)
-	-- START: GMSP
-	--[[if not bnetSent then
-		GMSP.HandOffSend(name, payload, isRequest)
-	end]]
-	-- END: GMSP
-	return numChunks
-	end
+function msp:Send(name, chunks)
+	name = NameMergedRealm(name)
+	return UnicastSend(name, chunks)
+end
 
 -- GHI makes use of this. Even if not used for filtering, keep it.
 function msp:PlayerKnownAbout(name)
