@@ -187,16 +187,21 @@ local function crc32c_hash(s)
 	return XOR(crc, 0xffffffff)
 end
 
-local function crc32c_tostring(s)
-	local crc = crc32c_hash(s)
-	local high = bit.rshift(crc, 16)
-	local low = crc % 0x10000
+local function tohex(n)
+	local high = bit.rshift(n, 16)
+	local low = n % 0x10000
 	return ("%04X%04X"):format(high, low):match("^0*(%x-)$")
+end
+
+local function crc32c_tostring(s)
+	return tohex(crc32c_hash(s))
 end
 
 local CRC32CCache = setmetatable({}, {
 	__index = function(self, s)
-		if not s or s == "" then return end
+		if not s or s == "" then
+			return nil
+		end
 		local crc = crc32c_tostring(s)
 		self[s] = crc
 		return crc
@@ -223,6 +228,7 @@ local emptyMeta = {
 	__index = function(self, field)
 		return ""
 	end,
+	__metatable = false,
 }
 
 local charMeta = {
@@ -237,6 +243,7 @@ local charMeta = {
 			return nil
 		end
 	end,
+	__metatable = false,
 }
 
 msp.char = setmetatable({}, {
@@ -244,19 +251,31 @@ msp.char = setmetatable({}, {
 		-- Account for unmaintained code using names without realms.
 		name = NameMergedRealm(name)
 		if not rawget(self, name) then
-			self[name] = setmetatable({}, charMeta)
+			rawset(self, name) = setmetatable({}, charMeta)
 			for i, func in ipairs(msp.callback.dataload) do
 				xpcall(func, geterrorhandler(), name, self[name])
 			end
 		end
 		return rawget(self, name)
 	end,
+	__newindex = function(self, name, value)
+		-- No legitimate reason for anything except us (using rawset above)
+		-- to create anything here.
+		return
+	end,
+	__metatable = false,
 })
 
 msp.protocolversion = PROTOCOL_VERSION
 
 msp.my = {}
-msp.myver = setmetatable({}, { __newindex = function() end }) -- Unused now.
+-- myver is unused, but if legacy code wants to use it, knock themselves out.
+msp.myver = setmetatable({}, {
+	__index = function(self, field)
+		return tonumber(CRC32CCache[msp.my[field]], 16)
+	end,
+	__newindex = function() end
+})
 msp.my.VP = tostring(msp.protocolversion)
 
 local playerOwnName = NameMergedRealm(UnitName("player"))
@@ -335,10 +354,10 @@ function Process(name, command)
 		else
 			reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.my[field]] or "")
 		end
-	elseif action == "!" and crc == msp.char[name].ver[field] then
+	elseif action == "!" and tonumber(crc, 16) == msp.char[name].ver[field] then
 		msp.char[name].time[field] = now
 	elseif action == "" then
-		msp.char[name].ver[field] = crc
+		msp.char[name].ver[field] = tonumber(crc, 16)
 		msp.char[name].time[field] = now
 		msp.char[name].field[field] = contents
 		if field == "TT" then
@@ -502,7 +521,7 @@ function msp:Request(name, fields)
 			if not self.char[name].ver[field] then
 				toSend[#toSend + 1] = "?" .. field
 			else
-				toSend[#toSend + 1] = ("?%s%s"):format(field, self.char[name].ver[field])
+				toSend[#toSend + 1] = ("?%s%s"):format(field, tohex(self.char[name].ver[field])
 			end
 			-- Marking time here prevents rapid re-requesting. Also done in
 			-- receive.
