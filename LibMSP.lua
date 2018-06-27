@@ -63,6 +63,7 @@ if not msp then
 			received = {},
 			updated = {},
 			status = {},
+			dataload = {},
 		},
 	}
 else
@@ -71,6 +72,9 @@ else
 	end
 	if not msp.callback.status then
 		msp.callback.status = {}
+	end
+	if not msp.callback.dataload then
+		msp.callback.dataload = {}
 	end
 end
 if msp.dummyframe then
@@ -238,9 +242,12 @@ local charMeta = {
 msp.char = setmetatable({}, {
 	__index = function(self, name)
 		-- Account for unmaintained code using names without realms.
-	name = NameMergedRealm(name)
+		name = NameMergedRealm(name)
 		if not rawget(self, name) then
 			self[name] = setmetatable({}, charMeta)
+			for i, func in ipairs(msp.callback.dataload) do
+				xpcall(func, geterrorhandler(), name, self[name])
+			end
 		end
 		return rawget(self, name)
 	end,
@@ -271,23 +278,6 @@ function msp:AddFieldsToTooltip(fields)
 		end
 	else
 		AddTTField(fields)
-	end
-end
-
-function msp:LoadCache(cacheTable)
-	for name, input in ipairs(cacheTable) do
-		if type(name) ~= "string" then
-			geterrorhandler()(("LibMSP: msp:LoadCache(): expected string-indexed table, got: %s, skipping that cache entry."):format(type(name), 2)
-		elseif type(input.field) ~= "table") then
-			geterrorhandler()(("LibMSP: msp:LoadCache(): missing mandatory field table for %s, skipping that character."):format(name), 2)
-		elseif type(input.ver) ~= "table" then
-			geterrorhandler()(("LibMSP: msp:LoadCache(): missing mandatory ver table for %s, skipping that character."):format(name), 2)
-		else
-			for field, contents in pairs(input.field) do
-				msp.char[name].field[field] = contents
-				msp.char[name].ver[field] = input[name].ver[field] or 0
-			end
-		end
 	end
 end
 
