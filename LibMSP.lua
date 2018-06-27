@@ -275,7 +275,6 @@ function msp:AddFieldsToTooltip(fields)
 end
 
 function msp:LoadCache(cacheTable)
-	error("Function unimplemented.", 2)
 	for name, input in ipairs(cacheTable) do
 		if type(name) ~= "string" then
 			geterrorhandler()(("LibMSP: msp:LoadCache(): expected string-indexed table, got: %s, skipping that cache entry."):format(type(name), 2)
@@ -315,8 +314,8 @@ end
 local ttCache
 local Process
 function Process(name, command)
-	local action, field, version, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
-	version = version ~= "" and version ~= "0" and version or nil
+	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
+	crc = crc ~= "" and crc ~= "0" and crc or nil
 	if not field then return end
 	local now = GetTime()
 	if action == "?" then
@@ -332,7 +331,7 @@ function Process(name, command)
 			msp.reply = {}
 		end
 		local reply = msp.reply
-		if version ~= CRC32CCache[msp.my[field]] then
+		if crc ~= CRC32CCache[msp.my[field]] then
 			if field == "TT" then
 				if not ttCache then
 					msp:Update()
@@ -346,10 +345,10 @@ function Process(name, command)
 		else
 			reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.my[field]] or "")
 		end
-	elseif action == "!" and version == msp.char[name].ver[field] then
+	elseif action == "!" and crc == msp.char[name].ver[field] then
 		msp.char[name].time[field] = now
 	elseif action == "" then
-		msp.char[name].ver[field] = version
+		msp.char[name].ver[field] = crc
 		msp.char[name].time[field] = now
 		msp.char[name].field[field] = contents
 		if field == "TT" then
