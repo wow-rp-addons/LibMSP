@@ -517,6 +517,7 @@ function msp:Request(name, fields)
 	local toSend = {}
 	for i, field in ipairs(fields) do
 		if TT_ALL[field] then
+			-- Will only get requested once, due to time marking/checking.
 			field = "TT"
 		end
 		if not self.char[name].supported or not self.char[name].time[field] or now > self.char[name].time[field] + FIELD_FREQUENCY then
