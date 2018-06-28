@@ -90,28 +90,6 @@ msp.dummyframe = {
 
 msp.version = VERSION
 
--- Realm part matching is greedy, as realm names will rarely have dashes, but
--- player names will never.
-local FULL_PLAYER_SPLIT = FULL_PLAYER_NAME:gsub("-", "%%%%-"):format("^(.-)", "(.+)$")
-
-local function NameMergedRealm(name, realm)
-	if type(name) ~= "string" or name == "" then
-		return nil
-	elseif not realm or realm == "" then
-		-- Normally you'd just return the full input name without reformatting,
-		-- but Blizzard has started returning an occasional "Name-Realm Name"
-		-- combination with spaces and hyphens in the realm name.
-		local splitName, splitRealm = name:match(FULL_PLAYER_SPLIT)
-		if splitName and splitRealm then
-			name = splitName
-			realm = splitRealm
-		else
-			realm = GetRealmName()
-		end
-	end
-	return FULL_PLAYER_NAME:format(name, (realm:gsub("%s*%-*", "")))
-end
-
 local CRC32C = {
 	0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4,
 	0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
@@ -251,7 +229,7 @@ local charMeta = {
 msp.char = setmetatable({}, {
 	__index = function(self, name)
 		-- Account for unmaintained code using names without realms.
-		name = NameMergedRealm(name)
+		name = AddOn_Chomp.NameMergedRealm(name)
 		if not rawget(self, name) then
 			rawset(self, name, setmetatable({}, charMeta))
 			for i, func in ipairs(msp.callback.dataload) do
@@ -280,7 +258,7 @@ msp.myver = setmetatable({}, {
 })
 msp.my.VP = tostring(msp.protocolversion)
 
-local playerOwnName = NameMergedRealm(UnitName("player"))
+local playerOwnName = AddOn_Chomp.NameMergedRealm(UnitName("player"))
 
 local function AddTTField(field)
 	if type(field) ~= "string" or not field:find("^%u%u$") then
@@ -436,7 +414,7 @@ end
 local function Chomp_Unicast(...)
 	local prefix, message, channel, sender = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
-	local name = NameMergedRealm(sender)
+	local name = AddOn_Chomp.NameMergedRealm(sender)
 	msp.char[name].supported = true
 	msp.char[name].scantime = nil
 	HandleMessage(name, message, sessionID, msgID == msgTotal)
@@ -501,7 +479,7 @@ function msp:Request(name, fields)
 	if name:match("^([^%-]+)") == UNKNOWN then
 		return false
 	end
-	name = NameMergedRealm(name)
+	name = AddOn_Chomp.NameMergedRealm(name)
 	local now = GetTime()
 	if self.char[name].supported == false and now < self.char[name].scantime + PROBE_FREQUENCY then
 		return false
@@ -539,7 +517,7 @@ function msp:Request(name, fields)
 end
 
 function msp:Send(name, chunks)
-	name = NameMergedRealm(name)
+	name = AddOn_Chomp.NameMergedRealm(name)
 	return UnicastSend(name, chunks)
 end
 
@@ -548,6 +526,6 @@ function msp:PlayerKnownAbout(name)
 	if not name or name == "" then
 		return false
 	end
-	-- NameMergedRealm() is called on this in the msp.char metatable.
+	-- AddOn_Chomp.NameMergedRealm() is called on this in the msp.char metatable.
 	return self.char[name].supported ~= nil
 end
