@@ -475,7 +475,7 @@ function msp:Update()
 			updated = true
 			myPrevious[field] = contents or ""
 			-- Trigger CRC32C caching for this string.
-			CRC32CCache[contents]
+			local crc = CRC32CCache[contents]
 		end
 	end
 	if updated then
@@ -515,13 +515,13 @@ function msp:Request(name, fields)
 	local toSend = {}
 	for i, field in ipairs(fields) do
 		if TT_ALL[field] then
-			field == "TT"
+			field = "TT"
 		end
 		if not self.char[name].supported or not self.char[name].time[field] or now > self.char[name].time[field] + FIELD_FREQUENCY then
 			if not self.char[name].ver[field] then
 				toSend[#toSend + 1] = "?" .. field
 			else
-				toSend[#toSend + 1] = ("?%s%s"):format(field, tohex(self.char[name].ver[field])
+				toSend[#toSend + 1] = ("?%s%s"):format(field, tohex(self.char[name].ver[field]))
 			end
 			-- Marking time here prevents rapid re-requesting. Also done in
 			-- receive.
