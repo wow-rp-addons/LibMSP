@@ -36,7 +36,9 @@ local VERSION = 9
 local PROTOCOL_VERSION = 3
 local CHOMP_VERSION = 0
 
-assert(not IsLoggedIn(), ("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
+if IsLoggedIn() then
+	error(("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
+end
 if msp and (msp.version or 0) >= VERSION then return end
 assert(AddOn_Chomp and AddOn_Chomp.GetVersion() >= CHOMP_VERSION, "LibMSP requires Chomp v0 or later.")
 
