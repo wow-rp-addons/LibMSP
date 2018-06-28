@@ -251,7 +251,7 @@ msp.char = setmetatable({}, {
 		-- Account for unmaintained code using names without realms.
 		name = NameMergedRealm(name)
 		if not rawget(self, name) then
-			rawset(self, name) = setmetatable({}, charMeta)
+			rawset(self, name, setmetatable({}, charMeta))
 			for i, func in ipairs(msp.callback.dataload) do
 				xpcall(func, geterrorhandler(), name, self[name])
 			end
