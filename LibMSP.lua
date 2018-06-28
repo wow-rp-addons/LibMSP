@@ -381,7 +381,7 @@ function Process(name, command)
 end
 
 local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
-local function HandleMessage(method, name, message, sessionID, isComplete)
+local function HandleMessage(name, message, sessionID, isComplete)
 	local hasEndOfCommand = message:find(SEPARATOR, nil, true)
 	local buffer = msp.char[name].buffer[sessionID or 0]
 	if isComplete or hasEndOfCommand then
@@ -439,7 +439,7 @@ local function Chomp_Unicast(...)
 	local name = NameMergedRealm(sender)
 	msp.char[name].supported = true
 	msp.char[name].scantime = nil
-	HandleMessage("UNICAST", name, message, sessionID, msgID == msgTotal)
+	HandleMessage(name, message, sessionID, msgID == msgTotal)
 
 	-- Inform status handlers of the message.
 	for i, func in ipairs(msp.callback.status) do
