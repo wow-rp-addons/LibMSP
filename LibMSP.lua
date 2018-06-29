@@ -38,9 +38,11 @@ local CHOMP_VERSION = 0
 
 if IsLoggedIn() then
 	error(("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
+elseif msp and (msp.version or 0) >= VERSION then
+	return
+elseif not AddOn_Chomp or AddOn_Chomp.GetVersion() < CHOMP_VERSION then
+	error(("LibMSP requires Chomp v%d or later."):format(CHOMP_VERSION))
 end
-if msp and (msp.version or 0) >= VERSION then return end
-assert(AddOn_Chomp and AddOn_Chomp.GetVersion() >= CHOMP_VERSION, "LibMSP requires Chomp v0 or later.")
 
 local PREFIX_UNICAST = "MSP"
 local SEPARATOR = string.char(0x7f)
@@ -258,7 +260,7 @@ msp.myver = setmetatable({}, {
 })
 msp.my.VP = tostring(msp.protocolversion)
 
-local playerOwnName = AddOn_Chomp.NameMergedRealm(UnitName("player"))
+local playerOwnName = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
 
 local function AddTTField(field)
 	if type(field) ~= "string" or not field:find("^%u%u$") then
@@ -287,6 +289,12 @@ local requestTime = setmetatable({}, {
 	end,
 })
 
+local OPTS_MEDIUM = {
+	priority = "MEDIUM",
+}
+local OPTS_LOW = {
+	priority = "LOW",
+}
 local function UnicastSend(name, chunks, isRequest)
 	local payload
 	if type(chunks) == "string" then
@@ -296,7 +304,7 @@ local function UnicastSend(name, chunks, isRequest)
 	else
 		return 0
 	end
-	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX_UNICAST, payload, "WHISPER", name, isRequest and "MEDIUM" or "LOW", "MSP-" .. name)
+	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX_UNICAST, payload, "WHISPER", name, isRequest and OPTS_MEDIUM or OPTS_LOW)
 	return math.ceil(#payload / 255)
 end
 
@@ -426,10 +434,12 @@ local function Chomp_Unicast(...)
 end
 
 AddOn_Chomp.RegisterAddonPrefix(PREFIX_UNICAST, Chomp_Unicast, {
-	needBuffer = true,
 	permitBattleNet = true,
 	permitLogged = true,
 	permitUnlogged = false,
+	validTypes = {
+		string = true,
+	},
 })
 
 local function Chomp_Error(name)
