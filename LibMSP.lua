@@ -182,7 +182,7 @@ end
 local CRC32CCache = setmetatable({}, {
 	__index = function(self, s)
 		if not s or s == "" then
-			return nil
+			return ""
 		end
 		local crc = crc32c_tostring(s)
 		self[s] = crc
@@ -312,7 +312,7 @@ local ttCache
 local Process
 function Process(name, command)
 	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
-	crc = crc ~= "" and crc ~= "0" and crc or nil
+	crc = crc ~= "0" and crc or ""
 	if not field then return end
 	local now = GetTime()
 	if action == "?" then
