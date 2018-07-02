@@ -326,10 +326,10 @@ function Process(name, command, isSafe)
 		end
 		requestTime[name][field] = now + 5
 		if crc ~= CRC32CCache[msp.my[field]] then
-			if not msp.reply then
-				msp.reply = {}
+			if not msp.char[name].safeReply then
+				msp.char[name].safeReply = {}
 			end
-			local reply = msp.reply
+			local reply = msp.char[name].safeReply
 			if field == "TT" then
 				if not ttCache then
 					msp:Update()
@@ -341,10 +341,10 @@ function Process(name, command, isSafe)
 				reply[#reply + 1] = ("%s%s=%s"):format(field, CRC32CCache[msp.my[field]], msp.my[field])
 			end
 		else
-			if not msp.unsafeReply then
-				msp.unsafeReply = {}
+			if not msp.char[name].unsafeReply then
+				msp.char[name].unsafeReply = {}
 			end
-			local reply = msp.unsafeReply
+			local reply = msp.char[name].unsafeReply
 			reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.my[field]] or "")
 		end
 	elseif action == "!" and tonumber(crc, 16) == msp.char[name].ver[field] then
@@ -373,9 +373,8 @@ end
 
 local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
 local function HandleMessage(name, message, isSafe, sessionID, isComplete)
-	local hasEndOfCommand = message:find(SEPARATOR, nil, true)
 	local buffer = msp.char[name].buffer[sessionID or 0]
-	if isComplete or hasEndOfCommand then
+	if isComplete or message:find(SEPARATOR, nil, true) then
 		if buffer then
 			if type(buffer) == "string" then
 				message = buffer .. message
@@ -385,28 +384,26 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 			end
 			msp.char[name].buffer[sessionID] = nil
 		end
-		if not hasEndOfCommand then
+		if isComplete then
 			Process(name, message, isSafe)
 		else
 			for command in message:gmatch(PROCESS_GMATCH) do
-				if isComplete or command:find("^[^%?]") then
-					Process(name, command, isSafe)
-					if not isComplete then
-						message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
-					end
+				Process(name, command, isSafe)
+				if not isComplete then
+					message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
 				end
 			end
 		end
 	end
 	if isComplete then
-		if msp.reply then
-			local reply = msp.reply
-			msp.reply = nil
+		local safeRreply = msp.char[name].safeReply
+		if safeReply then
+			msp.char[name].safeReply = nil
 			UnicastSend(name, reply, true)
 		end
-		if msp.unsafeReply then
-			local reply = msp.unsafeReply
-			msp.unsafeReply = nil
+		local unsafeRreply = msp.char[name].unsafeReply
+		if unsafeReply then
+			msp.char[name].unsafeReply = nil
 			UnicastSend(name, reply, false)
 		end
 		for i, func in ipairs(msp.callback.received) do
@@ -446,9 +443,7 @@ local function Chomp_Unicast(...)
 end
 
 AddOn_Chomp.RegisterAddonPrefix(PREFIX_UNICAST, Chomp_Unicast, {
-	permitBattleNet = true,
-	permitLogged = true,
-	permitUnlogged = true, -- Tested for elsewhere.
+	fullMsgOnly = false,
 	validTypes = {
 		string = true,
 	},
