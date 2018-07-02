@@ -32,7 +32,7 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local VERSION = 9
+local VERSION = 10
 local PROTOCOL_VERSION = 3
 local CHOMP_VERSION = 0
 
@@ -44,7 +44,7 @@ elseif not AddOn_Chomp or AddOn_Chomp.GetVersion() < CHOMP_VERSION then
 	error(("LibMSP requires Chomp v%d or later."):format(CHOMP_VERSION))
 end
 
-local PREFIX_UNICAST = "MSP"
+local PREFIX = "MSP"
 local SEPARATOR = string.char(0x7f)
 
 local TT_ALONE = { "TT" }
@@ -89,8 +89,6 @@ msp.dummyframe = {
 	RegisterEvent = function() end,
 	UnregisterEvent = function() end,
 }
-
-msp.version = VERSION
 
 local CRC32C = {
 	0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4,
@@ -296,7 +294,7 @@ local OPTS_UNSAFE = {
 local OPTS_SAFE = {
 	priority = "LOW",
 }
-local function UnicastSend(name, chunks, safeSend)
+local function Send(name, chunks, safeSend)
 	local payload
 	if type(chunks) == "string" then
 		payload = chunks
@@ -305,7 +303,7 @@ local function UnicastSend(name, chunks, safeSend)
 	else
 		return 0
 	end
-	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX_UNICAST, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
+	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
 	return math.ceil(#payload / 255)
 end
 
@@ -399,12 +397,12 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 		local safeRreply = msp.char[name].safeReply
 		if safeReply then
 			msp.char[name].safeReply = nil
-			UnicastSend(name, reply, true)
+			Send(name, reply, true)
 		end
 		local unsafeRreply = msp.char[name].unsafeReply
 		if unsafeReply then
 			msp.char[name].unsafeReply = nil
-			UnicastSend(name, reply, false)
+			Send(name, reply, false)
 		end
 		for i, func in ipairs(msp.callback.received) do
 			xpcall(func, geterrorhandler(), name)
@@ -426,7 +424,7 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	end
 end
 
-local function Chomp_Unicast(...)
+local function Chomp_Callback(...)
 	local prefix, message, channel, sender = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
 	local name = AddOn_Chomp.NameMergedRealm(sender)
@@ -442,7 +440,7 @@ local function Chomp_Unicast(...)
 	end
 end
 
-AddOn_Chomp.RegisterAddonPrefix(PREFIX_UNICAST, Chomp_Unicast, {
+AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
 	fullMsgOnly = false,
 	validTypes = {
 		string = true,
@@ -527,7 +525,7 @@ function msp:Request(name, fields)
 		end
 	end
 	if #toSend > 0 then
-		UnicastSend(name, toSend, false)
+		Send(name, toSend, false)
 		return true
 	end
 	return false
@@ -535,7 +533,7 @@ end
 
 function msp:Send(name, chunks)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	return UnicastSend(name, chunks, true)
+	return Send(name, chunks, true)
 end
 
 -- GHI makes use of this. Even if not used for filtering, keep it.
@@ -546,3 +544,5 @@ function msp:PlayerKnownAbout(name)
 	-- AddOn_Chomp.NameMergedRealm() is called on this in the msp.char metatable.
 	return self.char[name].supported ~= nil
 end
+
+msp.version = VERSION

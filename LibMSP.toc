@@ -1,10 +1,10 @@
 ## Interface: 80000
 ## X-Interface: 80000
 ## Title: LibMSP
-## Version: 0_alpha2
-## Author: Justin Snelgrove
+## Version: 10
+## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
-## X-License: ISC
+## X-License: CC0
 
 LibMSP.xml
