@@ -289,13 +289,14 @@ local requestTime = setmetatable({}, {
 	end,
 })
 
-local OPTS_MEDIUM = {
+local OPTS_UNSAFE = {
+	binaryBlob = true, -- Causes Chomp to not send over logged.
 	priority = "MEDIUM",
 }
-local OPTS_LOW = {
+local OPTS_SAFE = {
 	priority = "LOW",
 }
-local function UnicastSend(name, chunks, isRequest)
+local function UnicastSend(name, chunks, safeSend)
 	local payload
 	if type(chunks) == "string" then
 		payload = chunks
@@ -304,13 +305,13 @@ local function UnicastSend(name, chunks, isRequest)
 	else
 		return 0
 	end
-	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX_UNICAST, payload, "WHISPER", name, isRequest and OPTS_MEDIUM or OPTS_LOW)
+	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX_UNICAST, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
 	return math.ceil(#payload / 255)
 end
 
 local ttCache
 local Process
-function Process(name, command)
+function Process(name, command, isSafe)
 	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
 	crc = crc ~= "0" and crc or ""
 	if not field then return end
@@ -324,11 +325,11 @@ function Process(name, command)
 			return
 		end
 		requestTime[name][field] = now + 5
-		if not msp.reply then
-			msp.reply = {}
-		end
-		local reply = msp.reply
 		if crc ~= CRC32CCache[msp.my[field]] then
+			if not msp.reply then
+				msp.reply = {}
+			end
+			local reply = msp.reply
 			if field == "TT" then
 				if not ttCache then
 					msp:Update()
@@ -340,11 +341,15 @@ function Process(name, command)
 				reply[#reply + 1] = ("%s%s=%s"):format(field, CRC32CCache[msp.my[field]], msp.my[field])
 			end
 		else
+			if not msp.unsafeReply then
+				msp.unsafeReply = {}
+			end
+			local reply = msp.unsafeReply
 			reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.my[field]] or "")
 		end
 	elseif action == "!" and tonumber(crc, 16) == msp.char[name].ver[field] then
 		msp.char[name].time[field] = now
-	elseif action == "" then
+	elseif action == "" and isSafe then
 		msp.char[name].ver[field] = tonumber(crc, 16)
 		msp.char[name].time[field] = now
 		msp.char[name].field[field] = contents
@@ -367,7 +372,7 @@ function Process(name, command)
 end
 
 local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
-local function HandleMessage(name, message, sessionID, isComplete)
+local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	local hasEndOfCommand = message:find(SEPARATOR, nil, true)
 	local buffer = msp.char[name].buffer[sessionID or 0]
 	if isComplete or hasEndOfCommand then
@@ -381,11 +386,11 @@ local function HandleMessage(name, message, sessionID, isComplete)
 			msp.char[name].buffer[sessionID] = nil
 		end
 		if not hasEndOfCommand then
-			Process(name, message)
+			Process(name, message, isSafe)
 		else
 			for command in message:gmatch(PROCESS_GMATCH) do
 				if isComplete or command:find("^[^%?]") then
-					Process(name, command)
+					Process(name, command, isSafe)
 					if not isComplete then
 						message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
 					end
@@ -397,6 +402,11 @@ local function HandleMessage(name, message, sessionID, isComplete)
 		if msp.reply then
 			local reply = msp.reply
 			msp.reply = nil
+			UnicastSend(name, reply, true)
+		end
+		if msp.unsafeReply then
+			local reply = msp.unsafeReply
+			msp.unsafeReply = nil
 			UnicastSend(name, reply, false)
 		end
 		for i, func in ipairs(msp.callback.received) do
@@ -425,7 +435,9 @@ local function Chomp_Unicast(...)
 	local name = AddOn_Chomp.NameMergedRealm(sender)
 	msp.char[name].supported = true
 	msp.char[name].scantime = nil
-	HandleMessage(name, message, sessionID, msgID == msgTotal)
+	local method = channel:match("%:(.+)$")
+	local isSafe = method == "BATTLENET" or method == "LOGGED"
+	HandleMessage(name, message, isSafe, sessionID, msgID == msgTotal)
 
 	-- Inform status handlers of the message.
 	for i, func in ipairs(msp.callback.status) do
@@ -436,7 +448,7 @@ end
 AddOn_Chomp.RegisterAddonPrefix(PREFIX_UNICAST, Chomp_Unicast, {
 	permitBattleNet = true,
 	permitLogged = true,
-	permitUnlogged = false,
+	permitUnlogged = true, -- Tested for elsewhere.
 	validTypes = {
 		string = true,
 	},
@@ -520,7 +532,7 @@ function msp:Request(name, fields)
 		end
 	end
 	if #toSend > 0 then
-		UnicastSend(name, toSend, true)
+		UnicastSend(name, toSend, false)
 		return true
 	end
 	return false
@@ -528,7 +540,7 @@ end
 
 function msp:Send(name, chunks)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	return UnicastSend(name, chunks)
+	return UnicastSend(name, chunks, true)
 end
 
 -- GHI makes use of this. Even if not used for filtering, keep it.
