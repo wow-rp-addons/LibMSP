@@ -1,11 +1,10 @@
-## Interface: 60000
-## Title: LibMSPX
+## Interface: 80000
+## X-Interface: 80000
+## Title: LibMSP
 ## Version: 0_alpha2
-## Author: Bor of Wyrmrest Accord (US)
+## Author: Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
 ## X-License: ISC
 
-libfakedraw.lua
-libbw.lua
-libmspx.lua
+LibMSP.xml
