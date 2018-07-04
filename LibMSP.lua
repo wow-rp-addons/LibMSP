@@ -1,18 +1,21 @@
 --[[
-	LibMSP - highly portable implementation of the Mary Sue Protocol for RP addon communication
-	Written by Etarna Moonshyne <etarna@moonshyne.org>
+	Project: LibMSP
+	Author: "Etarna Moonshyne"
+	Author: Renaud "Ellypse" Parize
+	Author: Justin Snelgrove
 
-	Released into the public domain by the author - free for any use or embedding. Go nuts.
-	Public domain (CC0): http://creativecommons.org/publicdomain/zero/1.0/
-	It would be nice if changes to this were given away in the same manner, but you don't have to.
+	This work is licensed under the Creative Commons Zero license. While not
+	required by the license, it is requested that you retain this notice and
+	the list of authors with any distributions, modified or unmodified, as it
+	may be required by law in some jurisdictions due to the moral rights of
+	authorship.
 
-	- Easy to embed: it's a singleton which defines a global table: msp
-	- It requires (only) ChatThrottleLib
+	It would be appreciated if modified copies of the library are released
+	under the same license, but this is also not required.
 
 	- Put your character's field data in the table msp.my, e.g. msp.my["NA"] = UnitName("player")
 	- When you initialise or update your character's field data, call msp:Update(); no parameters
 	- Don't mess with msp.my['TT'], that's used internally
-	- Please save the contents of the table msp.myver between sessions, so we always count up
 
 	- To request one or more fields from someone else, call msp:Request( player, fields )
 	  fields can be nil (gets you TT i.e. tooltip), or a string (one field) or a table (multiple)
@@ -27,10 +30,6 @@
 	- All field names are two capital letters. Best if you agree any extensions.
 	
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
-
-	Modified by Ellypse <ellypse@totalrp3.info> @EllypseCelwe, under the same licensing
-	On 2017/07/31: Added support for the XC field, indicating the total number of chunks sent
-	On 2018/06/15: Added support for patch 8.0.1
 ]]
 
 local libmsp_version = 8
