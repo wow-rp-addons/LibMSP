@@ -372,7 +372,8 @@ end
 local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
 local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	local buffer = msp.char[name].buffer[sessionID or 0]
-	if isComplete or message:find(SEPARATOR, nil, true) then
+	local multiCommand = message:find(SEPARATOR, nil, true)
+	if isComplete or multiCommand then
 		if buffer then
 			if type(buffer) == "string" then
 				message = buffer .. message
@@ -382,7 +383,7 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 			end
 			msp.char[name].buffer[sessionID] = nil
 		end
-		if isComplete then
+		if not multiCommand then
 			Process(name, message, isSafe)
 		else
 			for command in message:gmatch(PROCESS_GMATCH) do
@@ -394,15 +395,15 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 		end
 	end
 	if isComplete then
-		local safeRreply = msp.char[name].safeReply
+		local safeReply = msp.char[name].safeReply
 		if safeReply then
 			msp.char[name].safeReply = nil
-			Send(name, reply, true)
+			Send(name, safeReply, true)
 		end
-		local unsafeRreply = msp.char[name].unsafeReply
+		local unsafeReply = msp.char[name].unsafeReply
 		if unsafeReply then
 			msp.char[name].unsafeReply = nil
-			Send(name, reply, false)
+			Send(name, unsafeReply, false)
 		end
 		for i, func in ipairs(msp.callback.received) do
 			xpcall(func, geterrorhandler(), name)
@@ -469,11 +470,14 @@ function msp:Update()
 		elseif (myPrevious[field] or "") ~= contents then
 			updated = true
 			myPrevious[field] = contents or ""
-			-- Trigger CRC32C caching for this string.
-			local crc = CRC32CCache[contents]
 		end
 	end
 	if updated then
+		local charTable = msp.char[UnitName("player")]
+		for field, contents in pairs(msp.my) do
+			charTable.field[field] = contents
+			charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
+		end
 		local tt = {}
 		for i, field in ipairs(TT_LIST) do
 			if (self.my[field] or "") == "" then
@@ -485,6 +489,8 @@ function msp:Update()
 		local newtt = table.concat(tt, SEPARATOR) or ""
 		if ttCache ~= ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt]) then
 			ttCache = ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt])
+			msp.my.TT = newtt
+			charTable.ver.TT = tonumber(CRC32CCache[newtt], 16)
 		end
 	end
 	return updated
