@@ -295,6 +295,7 @@ local OPTS_UNSAFE = {
 local OPTS_SAFE = {
 	priority = "LOW",
 	allowBroadcast = true,
+	universalBroadcast = true,
 }
 local function Send(name, chunks, safeSend)
 	local payload
