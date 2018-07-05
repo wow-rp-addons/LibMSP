@@ -462,15 +462,17 @@ function msp:Update()
 		end
 	end
 	for field, contents in pairs(self.my) do
-		if contents:find(SEPARATOR, nil, true) then
-			self.my[field] = myPrevious[field]
-			geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
-		elseif (myPrevious[field] or "") ~= contents then
-			updated = true
-			myPrevious[field] = contents or ""
+		if field ~= "TT" then
+			if contents:find(SEPARATOR, nil, true) then
+				self.my[field] = myPrevious[field]
+				geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
+			elseif (myPrevious[field] or "") ~= contents then
+				updated = true
+				myPrevious[field] = contents or ""
+			end
 		end
 	end
-	if updated then
+	if updated or not ttCache then
 		local charTable = msp.char[UnitName("player")]
 		for field, contents in pairs(msp.my) do
 			charTable.field[field] = contents
@@ -487,6 +489,7 @@ function msp:Update()
 		local newtt = table.concat(tt, SEPARATOR) or ""
 		if ttCache ~= ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt]) then
 			ttCache = ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt])
+			-- Set this here for CRC checking elsewhere.
 			msp.my.TT = newtt
 			charTable.ver.TT = tonumber(CRC32CCache[newtt], 16)
 		end
