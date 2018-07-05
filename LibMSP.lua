@@ -410,12 +410,6 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 		end
 		for i, func in ipairs(msp.callback.received) do
 			xpcall(func, geterrorhandler(), name)
-			local ambiguated = Ambiguate(name, "none")
-			if ambiguated ~= name then
-				-- Same thing, but for name without realm, supports
-				-- unmaintained code.
-				xpcall(func, geterrorhandler(), ambiguated)
-			end
 		end
 	elseif buffer then
 		if type(buffer) == "string" then
