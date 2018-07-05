@@ -290,9 +290,11 @@ local requestTime = setmetatable({}, {
 local OPTS_UNSAFE = {
 	binaryBlob = true, -- Causes Chomp to not send over logged.
 	priority = "MEDIUM",
+	allowBroadcast = true,
 }
 local OPTS_SAFE = {
 	priority = "LOW",
+	allowBroadcast = true,
 }
 local function Send(name, chunks, safeSend)
 	local payload
@@ -443,6 +445,7 @@ end
 
 AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
 	fullMsgOnly = false,
+	broadcastPrefix = true,
 	validTypes = {
 		string = true,
 	},
