@@ -252,6 +252,9 @@ msp.my = {}
 -- myver is unused, but if legacy code wants to use it, knock themselves out.
 msp.myver = setmetatable({}, {
 	__index = function(self, field)
+		if TT_ALL[field] then
+			return nil
+		end
 		return tonumber(CRC32CCache[msp.my[field]], 16)
 	end,
 	__newindex = function() end
@@ -306,7 +309,7 @@ local function Send(name, chunks, safeSend)
 	else
 		return 0
 	end
-	local bnetSent, loggedSent, inGameSent = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
+	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
 	return math.ceil(#payload / 255)
 end
 
@@ -314,8 +317,9 @@ local ttCache
 local Process
 function Process(name, command, isSafe)
 	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
-	crc = crc ~= "0" and crc or ""
 	if not field then return end
+	crc = crc ~= "0" and crc or ""
+	local crcNum = tonumber(crc, 16)
 	local now = GetTime()
 	if action == "?" then
 		if TT_ALL[field] then
@@ -348,10 +352,10 @@ function Process(name, command, isSafe)
 			local reply = msp.char[name].unsafeReply
 			reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.my[field]] or "")
 		end
-	elseif action == "!" and tonumber(crc, 16) == msp.char[name].ver[field] then
+	elseif action == "!" and crcNum == msp.char[name].ver[field] then
 		msp.char[name].time[field] = now
 	elseif action == "" and isSafe then
-		msp.char[name].ver[field] = tonumber(crc, 16)
+		msp.char[name].ver[field] = crcNum
 		msp.char[name].time[field] = now
 		msp.char[name].field[field] = contents
 		if field == "TT" then
@@ -366,7 +370,7 @@ function Process(name, command, isSafe)
 		end
 		if field then
 			for i, func in ipairs(msp.callback.updated) do
-				xpcall(func, geterrorhandler(), name, field, contents)
+				xpcall(func, geterrorhandler(), name, field, contents, crcNum)
 			end
 		end
 	end
