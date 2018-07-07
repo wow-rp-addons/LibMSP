@@ -480,7 +480,9 @@ function msp:Update()
 		local charTable = msp.char[UnitName("player")]
 		for field, contents in pairs(msp.my) do
 			charTable.field[field] = contents
-			charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
+			if not TT_ALL[field] then
+				charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
+			end
 		end
 		local tt = {}
 		for i, field in ipairs(TT_LIST) do
