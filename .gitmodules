@@ -1,0 +1,3 @@
+[submodule "Chomp"]
+	path = Chomp
+	url = https://github.com/Itarater/Chomp
