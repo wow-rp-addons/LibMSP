@@ -47,7 +47,6 @@ end
 local PREFIX = "MSP"
 local SEPARATOR = string.char(0x7f)
 
-local TT_ALONE = { "TT" }
 local PROBE_FREQUENCY = 120
 local FIELD_FREQUENCY = 20
 
@@ -533,26 +532,26 @@ function msp:Request(name, fields)
 		self.char[name].supported = false
 		self.char[name].scantime = now
 	end
-	if type(fields) == "string" and fields ~= "TT" then
+	if type(fields) == "string" then
 		fields = { fields }
-	elseif type(fields) ~= "table" then
-		fields = TT_ALONE
 	end
 	local toSend = {}
 	for i, field in ipairs(fields) do
-		if TT_ALL[field] then
-			-- Will only get requested once, due to time marking/checking.
-			field = "TT"
-		end
-		if now > (self.char[name].time[field] or 0) + FIELD_FREQUENCY then
-			if not self.char[name].ver[field] then
-				toSend[#toSend + 1] = "?" .. field
-			else
-				toSend[#toSend + 1] = ("?%s%s"):format(field, tohex(self.char[name].ver[field]))
+		if type(field) == "string" and field:find("^%u%u$") then
+			if TT_ALL[field] then
+				-- Will only get requested once, due to time marking/checking.
+				field = "TT"
 			end
-			-- Marking time here prevents rapid re-requesting. Also done in
-			-- receive.
-			self.char[name].time[field] = now
+			if now > (self.char[name].time[field] or 0) + FIELD_FREQUENCY then
+				if not self.char[name].ver[field] then
+					toSend[#toSend + 1] = "?" .. field
+				else
+					toSend[#toSend + 1] = ("?%s%s"):format(field, tohex(self.char[name].ver[field]))
+				end
+				-- Marking time here prevents rapid re-requesting. Also done in
+				-- receive.
+				self.char[name].time[field] = now
+			end
 		end
 	end
 	if #toSend > 0 then
