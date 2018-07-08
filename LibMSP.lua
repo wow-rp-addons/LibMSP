@@ -497,11 +497,13 @@ function msp:Update()
 	end
 	if updated or not ttCache then
 		local charTable = msp.char[UnitName("player")]
+		local tMax = 2 ^ 31 - 1
 		for field, contents in pairs(msp.my) do
 			charTable.field[field] = contents
 			if not TT_ALL[field] then
 				charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
 			end
+			charTable.time[field] = tMax
 		end
 		local tt = {}
 		for i, field in ipairs(TT_LIST) do
@@ -523,10 +525,10 @@ function msp:Update()
 end
 
 function msp:Request(name, fields)
-	if name:match("^([^%-]+)") == UNKNOWN then
+	name = AddOn_Chomp.NameMergedRealm(name)
+	if name == playerOwnName or name:match("^([^%-]+)") == UNKNOWN then
 		return false
 	end
-	name = AddOn_Chomp.NameMergedRealm(name)
 	local now = GetTime()
 	if self.char[name].supported == false and now < self.char[name].scantime + PROBE_FREQUENCY then
 		return false
@@ -565,6 +567,9 @@ end
 
 function msp:Send(name, chunks)
 	name = AddOn_Chomp.NameMergedRealm(name)
+	if name == playerOwnName then
+		return 0
+	end
 	return Send(name, chunks, "SAFE", "REQUEST")
 end
 
