@@ -90,6 +90,12 @@ msp.dummyframe = {
 	UnregisterEvent = function() end,
 }
 
+local function RunCallback(callbackName, ...)
+	for i, func in ipairs(msp.callback[callbackName]) do
+		xpcall(func, geterrorhandler(), ...)
+	end
+end
+
 local CRC32C = {
 	0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4,
 	0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
@@ -232,9 +238,7 @@ msp.char = setmetatable({}, {
 		name = AddOn_Chomp.NameMergedRealm(name)
 		if not rawget(self, name) then
 			rawset(self, name, setmetatable({}, charMeta))
-			for i, func in ipairs(msp.callback.dataload) do
-				xpcall(func, geterrorhandler(), name, self[name])
-			end
+			RunCallback("dataload", name, self[name])
 		end
 		return rawget(self, name)
 	end,
@@ -391,9 +395,7 @@ function Process(name, command, isSafe)
 			end
 		end
 		if field then
-			for i, func in ipairs(msp.callback.updated) do
-				xpcall(func, geterrorhandler(), name, field, contents, crcNum)
-			end
+			RunCallback("updated", name, field, contents, crcNum)
 		end
 	end
 end
@@ -431,9 +433,7 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 			msp.char[name].unsafeReply = nil
 			Send(name, unsafeReply, "UNSAFE", "REPLY")
 		end
-		for i, func in ipairs(msp.callback.received) do
-			xpcall(func, geterrorhandler(), name)
-		end
+		RunCallback("received", name)
 	elseif buffer then
 		if type(buffer) == "string" then
 			msp.char[name].buffer[sessionID] = { buffer, message }
@@ -456,9 +456,7 @@ local function Chomp_Callback(...)
 	HandleMessage(name, message, isSafe, sessionID, msgID == msgTotal)
 
 	-- Inform status handlers of the message.
-	for i, func in ipairs(msp.callback.status) do
-		xpcall(func, geterrorhandler(), name, "MESSAGE", msgID, msgTotal)
-	end
+	RunCallback("status", name, "MESSAGE", msgID, msgTotal)
 end
 
 AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
@@ -470,9 +468,7 @@ AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
 })
 
 local function Chomp_Error(name)
-	for i, func in ipairs(msp.callback.status) do
-		xpcall(func, geterrorhandler(), name, "ERROR")
-	end
+	RunCallback("status", name, "ERROR")
 end
 
 local myPrevious = {}
