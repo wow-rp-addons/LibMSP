@@ -470,6 +470,7 @@ AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
 local function Chomp_Error(name)
 	RunCallback("status", name, "ERROR")
 end
+AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 
 local myPrevious = {}
 function msp:Update()
