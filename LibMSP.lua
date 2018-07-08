@@ -290,17 +290,34 @@ local requestTime = setmetatable({}, {
 	end,
 })
 
-local OPTS_UNSAFE = {
-	binaryBlob = true, -- Causes Chomp to not send over logged.
-	priority = "MEDIUM",
-	allowBroadcast = true,
+local OPTS_MATRIX = {
+	SAFE = {
+		REPLY = {
+			priority = "LOW",
+			allowBroadcast = true,
+			universalBroadcast = true,
+		},
+		REQUEST = { -- This should never happen, but if it does...
+			priority = "LOW",
+			allowBroadcast = true,
+		},
+	},
+	UNSAFE = {
+		REPLY = {
+			binaryBlob = true,
+			priority = "LOW",
+			allowBroadcast = true,
+			universalBroadcast = true,
+		},
+		REQUEST = {
+			binaryBlob = true,
+			priority = "LOW",
+			allowBroadcast = true,
+		},
+	},
 }
-local OPTS_SAFE = {
-	priority = "LOW",
-	allowBroadcast = true,
-	universalBroadcast = true,
-}
-local function Send(name, chunks, safeSend)
+
+local function Send(name, chunks, msgSafety, msgType)
 	local payload
 	if type(chunks) == "string" then
 		payload = chunks
@@ -309,7 +326,7 @@ local function Send(name, chunks, safeSend)
 	else
 		return 0
 	end
-	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, safeSend and OPTS_SAFE or OPTS_UNSAFE)
+	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, OPTS_MATRIX[msgSafety][msgType])
 	return math.ceil(#payload / 255)
 end
 
@@ -407,12 +424,12 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 		local safeReply = msp.char[name].safeReply
 		if safeReply then
 			msp.char[name].safeReply = nil
-			Send(name, safeReply, true)
+			Send(name, safeReply, "SAFE", "REPLY")
 		end
 		local unsafeReply = msp.char[name].unsafeReply
 		if unsafeReply then
 			msp.char[name].unsafeReply = nil
-			Send(name, unsafeReply, false)
+			Send(name, unsafeReply, "UNSAFE", "REPLY")
 		end
 		for i, func in ipairs(msp.callback.received) do
 			xpcall(func, geterrorhandler(), name)
@@ -540,7 +557,7 @@ function msp:Request(name, fields)
 		end
 	end
 	if #toSend > 0 then
-		Send(name, toSend, false)
+		Send(name, toSend, "UNSAFE", "REQUEST")
 		return true
 	end
 	return false
@@ -548,7 +565,7 @@ end
 
 function msp:Send(name, chunks)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	return Send(name, chunks, true)
+	return Send(name, chunks, "SAFE", "REQUEST")
 end
 
 -- GHI makes use of this. Even if not used for filtering, keep it.
