@@ -318,7 +318,12 @@ local Process
 function Process(name, command, isSafe)
 	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
 	if not field then return end
-	crc = crc ~= "0" and crc or ""
+	if crc == "0" then
+		crc = ""
+	end
+	if contents == "" then
+		contents = nil
+	end
 	local crcNum = tonumber(crc, 16)
 	local now = GetTime()
 	if action == "?" then
@@ -363,7 +368,7 @@ function Process(name, command, isSafe)
 				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
 				-- but should have been sent with a tooltip (if they're used by
 				-- the opposing addon).
-				if msp.char[name].time[field] < now - PROBE_FREQUENCY then
+				if msp.char[name].field[field] and (msp.char[name].time[field] or 0) < now - PROBE_FREQUENCY then
 					Process(name, field)
 				end
 			end
@@ -376,11 +381,11 @@ function Process(name, command, isSafe)
 	end
 end
 
-local PROCESS_GMATCH = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
+local PROCESS = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
+local PROCESS_COMPLETE = ("([^%s]+)%s?"):format(SEPARATOR, SEPARATOR)
 local function HandleMessage(name, message, isSafe, sessionID, isComplete)
-	local buffer = msp.char[name].buffer[sessionID or 0]
-	local multiCommand = message:find(SEPARATOR, nil, true)
-	if isComplete or multiCommand then
+	if isComplete or message:find(SEPARATOR, nil, true) then
+		local buffer = msp.char[name].buffer[sessionID or 0]
 		if buffer then
 			if type(buffer) == "string" then
 				message = buffer .. message
@@ -390,17 +395,14 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 			end
 			msp.char[name].buffer[sessionID] = nil
 		end
-		if not multiCommand then
-			Process(name, message, isSafe)
-		else
-			for command in message:gmatch(PROCESS_GMATCH) do
-				Process(name, command, isSafe)
-				if not isComplete then
-					message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
-				end
+		for command in message:gmatch(isComplete and PROCESS_COMPLETE or PROCESS) do
+			Process(name, command, isSafe)
+			if not isComplete then
+				message = message:gsub(command:gsub("(%W)","%%%1") .. SEPARATOR, "")
 			end
 		end
 	end
+	local buffer = msp.char[name].buffer[sessionID or 0]
 	if isComplete then
 		local safeReply = msp.char[name].safeReply
 		if safeReply then
@@ -526,7 +528,7 @@ function msp:Request(name, fields)
 			-- Will only get requested once, due to time marking/checking.
 			field = "TT"
 		end
-		if not self.char[name].supported or not self.char[name].time[field] or now > self.char[name].time[field] + FIELD_FREQUENCY then
+		if now > (self.char[name].time[field] or 0) + FIELD_FREQUENCY then
 			if not self.char[name].ver[field] then
 				toSend[#toSend + 1] = "?" .. field
 			else
