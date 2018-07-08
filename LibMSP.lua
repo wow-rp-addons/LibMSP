@@ -48,10 +48,7 @@ local PREFIX = "MSP"
 local SEPARATOR = string.char(0x7f)
 
 local PROBE_FREQUENCY = 120
-local FIELD_FREQUENCY = 20
-
-local LONG_FIELD = { DE = true, HI = true }
-local RUNTIME_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, VA = true }
+local FIELD_FREQUENCY = 30
 
 local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
 local TT_ALL = {
