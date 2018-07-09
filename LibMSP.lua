@@ -468,51 +468,52 @@ local function Chomp_Error(name)
 end
 AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 
-local myPrevious = {}
 function msp:Update()
 	local updated = false
-	for field, contents in pairs(myPrevious) do
+	local charTable = self.char[playerOwnName]
+	charTable.supported = true
+	for field, contents in pairs(charTable.field) do
 		if not self.my[field] then
 			updated = true
-			myPrevious[field] = ""
+			charTable.field[field] = nil
+			charTable.ver[field] = nil
+			RunCallback("updated", playerOwnName, field, nil, nil)
 		end
 	end
 	for field, contents in pairs(self.my) do
+		if contents == "" then
+			contents = nil
+			self.my[field] = nil
+		end
 		if field ~= "TT" then
-			if contents:find(SEPARATOR, nil, true) then
-				self.my[field] = myPrevious[field]
+			if contents and contents:find(SEPARATOR, nil, true) then
+				self.my[field] = charTable.field[field]
 				geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
-			elseif (myPrevious[field] or "") ~= contents then
+			elseif charTable.field[field] ~= contents then
 				updated = true
-				myPrevious[field] = contents or ""
+				charTable.field[field] = contents
+				if not TT_ALL[field] then
+					charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
+				end
+				RunCallback("updated", playerOwnName, field, contents, tonumber(CRC32CCache[contents], 16))
 			end
 		end
 	end
 	if updated or not ttCache then
-		local charTable = msp.char[UnitName("player")]
-		local tMax = 2 ^ 31 - 1
-		for field, contents in pairs(msp.my) do
-			charTable.field[field] = contents
-			if not TT_ALL[field] then
-				charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
-			end
-			charTable.time[field] = tMax
-		end
 		local tt = {}
 		for i, field in ipairs(TT_LIST) do
-			if (self.my[field] or "") == "" then
+			if not self.my[field] then
 				tt[#tt + 1] = field
 			else
 				tt[#tt + 1] = ("%s=%s"):format(field, self.my[field])
 			end
 		end
-		local newtt = table.concat(tt, SEPARATOR) or ""
-		if ttCache ~= ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt]) then
-			ttCache = ("%s%sTT%s"):format(newtt, SEPARATOR, CRC32CCache[newtt])
-			-- Set this here for CRC checking elsewhere.
-			msp.my.TT = newtt
-			charTable.ver.TT = tonumber(CRC32CCache[newtt], 16)
-		end
+		local ttContents = table.concat(tt, SEPARATOR) or ""
+		ttCache = ("%s%sTT%s"):format(ttContents, SEPARATOR, CRC32CCache[ttContents])
+		-- Set this here for CRC checking elsewhere.
+		msp.my.TT = ttContents
+		charTable.ver.TT = tonumber(CRC32CCache[ttContents], 16)
+		RunCallback("received", playerOwnName)
 	end
 	return updated
 end
