@@ -403,7 +403,7 @@ function Process(name, command, isSafe)
 end
 
 local PROCESS = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
-local PROCESS_COMPLETE = ("([^%s]+)%s?"):format(SEPARATOR, SEPARATOR)
+local PROCESS_COMPLETE = PROCESS .. "?"
 local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	if isComplete or message:find(SEPARATOR, nil, true) then
 		local buffer = msp.char[name].buffer[sessionID or 0]
