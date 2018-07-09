@@ -47,8 +47,10 @@ end
 local PREFIX = "MSP"
 local SEPARATOR = string.char(0x7f)
 
-local PROBE_FREQUENCY = 120
+local PROBE_FREQUENCY = 300
 local FIELD_FREQUENCY = 30
+
+local TIME_MAX = 2 ^ 31 - 1
 
 local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
 local TT_ALL = {
@@ -56,6 +58,8 @@ local TT_ALL = {
 	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
 	IC = true,
 }
+
+local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 
 if not msp then
 	msp = {
@@ -377,9 +381,11 @@ function Process(name, command, isSafe)
 	elseif action == "!" and crcNum == msp.char[name].ver[field] then
 		msp.char[name].time[field] = now
 	elseif action == "" and isSafe then
-		msp.char[name].ver[field] = crcNum
-		msp.char[name].time[field] = now
 		msp.char[name].field[field] = contents
+		msp.char[name].ver[field] = crcNum
+		-- Assume unit fields won't change during a session, so only request
+		-- them once after getting a response.
+		msp.char[name].time[field] = not UNIT_FIELD[field] and now or TIME_MAX
 		if field == "TT" then
 			for field in pairs(TT_ALL) do
 				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
