@@ -83,8 +83,10 @@ else
 end
 if msp.dummyframe then
 	msp.dummyframe:UnregisterAllEvents()
-	msp.dummyframe:Hide()
+	msp.dummyframe:SetScript("OnEvent", nil)
 end
+msp.eventframe = msp.dummyframe or CreateFrame("Frame")
+msp.eventframe:Hide()
 msp.dummyframe = {
 	RegisterEvent = function() end,
 	UnregisterEvent = function() end,
@@ -474,6 +476,31 @@ local function Chomp_Error(name)
 end
 AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 
+local firstUpdateRun = false
+local function EventFrame_Handler(self, event, ...)
+	if event == "PLAYER_LOGIN" then
+		local GU = UnitGUID("player")
+		local class, GC, race, GR, GS, name, realm = GetPlayerInfoByGUID(GU)
+		local GF = UnitFactionGroup("player")
+		msp.my.GU = tostring(GU)
+		msp.my.GC = tostring(GC)
+		msp.my.GR = tostring(GR)
+		msp.my.GS = tostring(GS)
+		msp.my.GF = tostring(GF)
+		if GF == "Neutral" then
+			self:RegisterEvent("NEUTRAL_FACTION_SELECT_RESULT")
+		end
+	elseif event == "NEUTRAL_FACTION_SELECT_RESULT" then
+		local GF = UnitFactionGroup("player")
+		msp.my.GF = tostring(GF)
+	end
+	if firstUpdateRun then
+		msp:Update()
+	end
+end
+msp.eventframe:SetScript("OnEvent", EventFrame_Handler)
+msp.eventframe:RegisterEvent("PLAYER_LOGIN")
+
 function msp:Update()
 	local updated = false
 	local charTable = self.char[playerOwnName]
@@ -521,6 +548,7 @@ function msp:Update()
 		charTable.ver.TT = tonumber(CRC32CCache[ttContents], 16)
 		RunCallback("received", playerOwnName)
 	end
+	firstUpdateRun = true
 	return updated
 end
 
