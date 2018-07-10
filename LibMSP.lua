@@ -503,6 +503,7 @@ msp.eventframe:RegisterEvent("PLAYER_LOGIN")
 
 function msp:Update()
 	local updated = false
+	-- Remember, charTable.field will return "" for empty fields.
 	local charTable = self.char[playerOwnName]
 	charTable.supported = true
 	for field, contents in pairs(charTable.field) do
@@ -520,9 +521,9 @@ function msp:Update()
 		end
 		if field ~= "TT" then
 			if contents and contents:find(SEPARATOR, nil, true) then
-				self.my[field] = charTable.field[field]
+				self.my[field] = charTable.field[field] ~= "" and charTable.field[field] or nil
 				geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
-			elseif charTable.field[field] ~= contents then
+			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
 				if not TT_ALL[field] then
