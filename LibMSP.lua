@@ -85,7 +85,7 @@ if msp.dummyframe then
 	msp.dummyframe:UnregisterAllEvents()
 	msp.dummyframe:SetScript("OnEvent", nil)
 end
-msp.eventframe = msp.dummyframe or CreateFrame("Frame")
+msp.eventframe = msp.eventframe or msp.dummyframe or CreateFrame("Frame")
 msp.eventframe:Hide()
 msp.dummyframe = {
 	RegisterEvent = function() end,
@@ -449,6 +449,14 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	end
 end
 
+local Chomp_PrefixSettings = {
+	fullMsgOnly = false,
+	broadcastPrefix = true,
+	validTypes = {
+		string = true,
+	},
+}
+
 local function Chomp_Callback(...)
 	local prefix, message, channel, sender = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
@@ -463,22 +471,15 @@ local function Chomp_Callback(...)
 	RunCallback("status", name, "MESSAGE", msgID, msgTotal)
 end
 
-AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, {
-	fullMsgOnly = false,
-	broadcastPrefix = true,
-	validTypes = {
-		string = true,
-	},
-})
-
 local function Chomp_Error(name)
 	RunCallback("status", name, "ERROR")
 end
-AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 
 local firstUpdateRun = false
 local function EventFrame_Handler(self, event, ...)
 	if event == "PLAYER_LOGIN" then
+		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, Chomp_PrefixSettings)
+		AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 		local GU = UnitGUID("player")
 		local class, GC, race, GR, GS, name, realm = GetPlayerInfoByGUID(GU)
 		local GF = UnitFactionGroup("player")
