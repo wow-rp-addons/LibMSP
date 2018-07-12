@@ -62,6 +62,44 @@ local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 
 local PLAYER_NAME = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
 
+local PROCESS = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
+local PROCESS_COMPLETE = PROCESS .. "?"
+
+local CHOMP_PREFIX_SETTINGS = {
+	fullMsgOnly = false,
+	broadcastPrefix = true,
+	validTypes = {
+		string = true,
+	},
+}
+
+local CHOMP_OPTS_MATRIX = {
+	SAFE = {
+		REPLY = {
+			priority = "LOW",
+			allowBroadcast = true,
+			universalBroadcast = true,
+		},
+		REQUEST = { -- This should never happen, but if it does...
+			priority = "LOW",
+			allowBroadcast = true,
+		},
+	},
+	UNSAFE = {
+		REPLY = {
+			binaryBlob = true,
+			priority = "LOW",
+			allowBroadcast = true,
+			universalBroadcast = true,
+		},
+		REQUEST = {
+			binaryBlob = true,
+			priority = "LOW",
+			allowBroadcast = true,
+		},
+	},
+}
+
 if not msp then
 	msp = {}
 end
@@ -328,33 +366,6 @@ function msp:AddFieldsToTooltip(fields)
 	end
 end
 
-local OPTS_MATRIX = {
-	SAFE = {
-		REPLY = {
-			priority = "LOW",
-			allowBroadcast = true,
-			universalBroadcast = true,
-		},
-		REQUEST = { -- This should never happen, but if it does...
-			priority = "LOW",
-			allowBroadcast = true,
-		},
-	},
-	UNSAFE = {
-		REPLY = {
-			binaryBlob = true,
-			priority = "LOW",
-			allowBroadcast = true,
-			universalBroadcast = true,
-		},
-		REQUEST = {
-			binaryBlob = true,
-			priority = "LOW",
-			allowBroadcast = true,
-		},
-	},
-}
-
 local function Send(name, chunks, msgSafety, msgType)
 	local payload
 	if type(chunks) == "string" then
@@ -364,7 +375,7 @@ local function Send(name, chunks, msgSafety, msgType)
 	else
 		return 0
 	end
-	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, OPTS_MATRIX[msgSafety][msgType])
+	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, CHOMP_OPTS_MATRIX[msgSafety][msgType])
 	return math.ceil(#payload / 255)
 end
 
@@ -435,8 +446,6 @@ function Process(name, command, isSafe)
 	end
 end
 
-local PROCESS = ("([^%s]+)%s"):format(SEPARATOR, SEPARATOR)
-local PROCESS_COMPLETE = PROCESS .. "?"
 local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	if isComplete or message:find(SEPARATOR, nil, true) then
 		local buffer = msp.char[name].buffer[sessionID or 0]
@@ -480,14 +489,6 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 	end
 end
 
-local Chomp_PrefixSettings = {
-	fullMsgOnly = false,
-	broadcastPrefix = true,
-	validTypes = {
-		string = true,
-	},
-}
-
 local function Chomp_Callback(...)
 	local prefix, message, channel, sender = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
@@ -508,7 +509,7 @@ end
 
 local function EventFrame_Handler(self, event, ...)
 	if event == "PLAYER_LOGIN" then
-		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, Chomp_PrefixSettings)
+		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, CHOMP_PREFIX_SETTINGS)
 		AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 		local GU = UnitGUID("player")
 		local class, GC, race, GR, GS, name, realm = GetPlayerInfoByGUID(GU)
