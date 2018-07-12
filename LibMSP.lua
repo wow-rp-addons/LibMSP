@@ -52,48 +52,80 @@ local FIELD_FREQUENCY = 30
 
 local TIME_MAX = 2 ^ 31 - 1
 
+local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
+local TT_ALL = {
+	VP = true, VA = true, NA = true, NH = true,	NI = true, NT = true,
+	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
+	IC = true,
+}
 local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 
 local PLAYER_NAME = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
 
 if not msp then
-	msp = {
-		callback = {
-			received = {},
-			updated = {},
-			status = {},
-			dataload = {},
-		},
-	}
-else
-	if not msp.callback.updated then
-		msp.callback.updated = {}
-	end
-	if not msp.callback.status then
-		msp.callback.status = {}
-	end
-	if not msp.callback.dataload then
-		msp.callback.dataload = {}
-	end
+	msp = {}
 end
-
-if msp.dummyframe then
+if not msp.callback then
+	msp.callback = {}
+end
+if not msp.callback.received then
+	msp.callback.received = {}
+end
+if not msp.callback.updated then
+	msp.callback.updated = {}
+end
+if not msp.callback.status then
+	msp.callback.status = {}
+end
+if not msp.callback.dataload then
+	msp.callback.dataload = {}
+end
+if not msp.char then
+	msp.char = {}
+end
+if not msp.my then
+	msp.my = {}
+end
+if not msp.queuedRequests then
+	msp.queuedRequests = {}
+end
+if not msp.ttList then
+	msp.ttList = {}
+end
+if not msp.ttAll then
+	msp.ttAll = {}
+end
+if msp.dummyframe and not msp.eventFrame then
 	msp.dummyframe:UnregisterAllEvents()
 	msp.dummyframe:SetScript("OnEvent", nil)
 end
-msp.eventFrame = msp.eventFrame or msp.dummyframe or CreateFrame("Frame")
+if not msp.eventFrame then
+	msp.eventFrame = msp.dummyframe or CreateFrame("Frame")
+end
 msp.eventFrame:Hide()
 msp.dummyframe = {
 	RegisterEvent = function() end,
 	UnregisterEvent = function() end,
 }
 
-msp.ttList = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
-msp.ttAll = {
-	VP = true, VA = true, NA = true, NH = true,	NI = true, NT = true,
-	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
-	IC = true,
-}
+for i, constField in ipairs(TT_LIST) do
+	local needsAdding = true
+	for j, field in ipairs(msp.ttList) do
+		if field == constField then
+			needsAdding = false
+			break
+		end
+	end
+	if needsAdding then
+		msp.ttList[#msp.ttList + 1] = constField
+	end
+end
+
+for constField, isField in pairs(TT_ALL) do
+	if not msp.ttAll[constField] then
+		msp.ttAll[constField] = true
+	end
+end
 
 local function RunCallback(callbackName, ...)
 	for i, func in ipairs(msp.callback[callbackName]) do
@@ -237,7 +269,7 @@ local charMeta = {
 	__metatable = false,
 }
 
-msp.char = setmetatable({}, {
+setmetatable(msp.char, {
 	__index = function(self, name)
 		-- Account for unmaintained code using names without realms.
 		name = AddOn_Chomp.NameMergedRealm(name)
@@ -255,9 +287,16 @@ msp.char = setmetatable({}, {
 	__metatable = false,
 })
 
-msp.protocolversion = PROTOCOL_VERSION
+for charName, charTable in pairs(msp.char) do
+	setmetatable(charTable, charMeta)
+	if rawget(charTable.field) then
+		setmetatable(charTable.field, emptyMeta)
+	end
+end
 
-msp.my = {}
+msp.protocolversion = PROTOCOL_VERSION
+msp.my.VP = tostring(msp.protocolversion)
+
 -- myver is unused, but if legacy code wants to use it, knock themselves out.
 msp.myver = setmetatable({}, {
 	__index = function(self, field)
@@ -268,7 +307,6 @@ msp.myver = setmetatable({}, {
 	end,
 	__newindex = function() end
 })
-msp.my.VP = tostring(msp.protocolversion)
 
 local function AddTTField(field)
 	if type(field) ~= "string" or not field:find("^%u%u$") then
@@ -546,7 +584,6 @@ function msp:Update()
 	return updated
 end
 
-msp.queuedRequests = {}
 local function RunRequestQueue()
 	for name, fields in pairs(msp.queuedRequests) do
 		msp:Request(name, fields)
@@ -638,3 +675,7 @@ function msp:PlayerKnownAbout(name)
 end
 
 msp.version = VERSION
+
+if msp.firstUpdateRun then
+	msp:Update()
+end
