@@ -554,6 +554,39 @@ function msp:Update()
 	return updated
 end
 
+msp.queuedRequests = {}
+local function RunRequestQueue()
+	for name, fields in pairs(msp.queuedRequests) do
+		msp:Request(name, fields)
+		msp.queuedRequests[name] = nil
+	end
+end
+
+function msp:QueueRequest(name, field)
+	if type(field) ~= "string" or not field:find("^%u%u$") then
+		error("msp:QueueRequest(): field: invalid field")
+	end
+	name = AddOn_Chomp.NameMergedRealm(name)
+	if name == playerOwnName or name:match("^([^%-]+)") == UNKNOWN then
+		return false
+	end
+	local now = GetTime()
+	if self.char[name].supported == false and now < self.char[name].scantime + PROBE_FREQUENCY then
+		return false
+	elseif now <= (self.char[name].time[field] or 0) + FIELD_FREQUENCY then
+		return false
+	end
+	local pendingRequests = next(msp.queuedRequests) ~= nil
+	if not self.queuedRequests[name] then
+		self.queuedRequests[name] = {}
+	end
+	local queue = self.queuedRequests[name]
+	queue[#queue + 1] = field
+	if not pendingRequests then
+		C_Timer.After(0, RunRequestQueue)
+	end
+end
+
 function msp:Request(name, fields)
 	name = AddOn_Chomp.NameMergedRealm(name)
 	if name == playerOwnName or name:match("^([^%-]+)") == UNKNOWN then
