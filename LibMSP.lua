@@ -52,14 +52,9 @@ local FIELD_FREQUENCY = 30
 
 local TIME_MAX = 2 ^ 31 - 1
 
-local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
-local TT_ALL = {
-	VP = true, VA = true, NA = true, NH = true,	NI = true, NT = true,
-	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
-	IC = true,
-}
-
 local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
+
+local PLAYER_NAME = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
 
 if not msp then
 	msp = {
@@ -81,15 +76,23 @@ else
 		msp.callback.dataload = {}
 	end
 end
+
 if msp.dummyframe then
 	msp.dummyframe:UnregisterAllEvents()
 	msp.dummyframe:SetScript("OnEvent", nil)
 end
-msp.eventframe = msp.eventframe or msp.dummyframe or CreateFrame("Frame")
-msp.eventframe:Hide()
+msp.eventFrame = msp.eventFrame or msp.dummyframe or CreateFrame("Frame")
+msp.eventFrame:Hide()
 msp.dummyframe = {
 	RegisterEvent = function() end,
 	UnregisterEvent = function() end,
+}
+
+msp.ttList = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
+msp.ttAll = {
+	VP = true, VA = true, NA = true, NH = true,	NI = true, NT = true,
+	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
+	IC = true,
 }
 
 local function RunCallback(callbackName, ...)
@@ -224,7 +227,7 @@ local charMeta = {
 		if key == "field" then
 			self[key] = setmetatable({}, emptyMeta)
 			return self[key]
-		elseif key == "ver" or key == "time" or key == "buffer" then
+		elseif key == "ver" or key == "time" or key == "buffer" or key == "req" then
 			self[key] = {}
 			return self[key]
 		else
@@ -258,7 +261,7 @@ msp.my = {}
 -- myver is unused, but if legacy code wants to use it, knock themselves out.
 msp.myver = setmetatable({}, {
 	__index = function(self, field)
-		if TT_ALL[field] then
+		if msp.ttAll[field] then
 			return nil
 		end
 		return tonumber(CRC32CCache[msp.my[field]], 16)
@@ -267,15 +270,13 @@ msp.myver = setmetatable({}, {
 })
 msp.my.VP = tostring(msp.protocolversion)
 
-local playerOwnName = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
-
 local function AddTTField(field)
 	if type(field) ~= "string" or not field:find("^%u%u$") then
 		error("msp:AddFieldsToTooltip(): All fields must be strings matching Lua pattern \"%u%u\".", 3)
 	end
-	TT_LIST[#TT_LIST + 1] = field
-	if not TT_ALL[field] then
-		TT_ALL[field] = true
+	msp.ttList[#msp.ttList + 1] = field
+	if not msp.ttAll[field] then
+		msp.ttAll[field] = true
 	end
 end
 
@@ -288,13 +289,6 @@ function msp:AddFieldsToTooltip(fields)
 		AddTTField(fields)
 	end
 end
-
-local requestTime = setmetatable({}, {
-	__index = function(self, name)
-		self[name] = {}
-		return self[name]
-	end,
-})
 
 local OPTS_MATRIX = {
 	SAFE = {
@@ -336,7 +330,6 @@ local function Send(name, chunks, msgSafety, msgType)
 	return math.ceil(#payload / 255)
 end
 
-local ttCache
 local Process
 function Process(name, command, isSafe)
 	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
@@ -350,24 +343,24 @@ function Process(name, command, isSafe)
 	local crcNum = tonumber(crc, 16)
 	local now = GetTime()
 	if action == "?" then
-		if TT_ALL[field] then
+		if msp.ttAll[field] then
 			field = "TT"
 		end
-		if requestTime[name][field] and requestTime[name][field] > now then
-			requestTime[name][field] = now + 5
+		if (msp.char[name].req[field] or 0) > now then
+			msp.char[name].req[field] = now + 5
 			return
 		end
-		requestTime[name][field] = now + 5
+		msp.char[name].req[field] = now + 5
 		if crc ~= CRC32CCache[msp.my[field]] then
 			if not msp.char[name].safeReply then
 				msp.char[name].safeReply = {}
 			end
 			local reply = msp.char[name].safeReply
 			if field == "TT" then
-				if not ttCache then
+				if not msp.ttCache then
 					msp:Update()
 				end
-				reply[#reply + 1] = ttCache
+				reply[#reply + 1] = msp.ttCache
 			elseif not msp.my[field] or msp.my[field] == "" then
 				reply[#reply + 1] = field
 			else
@@ -389,7 +382,7 @@ function Process(name, command, isSafe)
 		-- them once after getting a response.
 		msp.char[name].time[field] = not UNIT_FIELD[field] and now or TIME_MAX
 		if field == "TT" then
-			for field in pairs(TT_ALL) do
+			for field in pairs(msp.ttAll) do
 				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
 				-- but should have been sent with a tooltip (if they're used by
 				-- the opposing addon).
@@ -475,7 +468,6 @@ local function Chomp_Error(name)
 	RunCallback("status", name, "ERROR")
 end
 
-local firstUpdateRun = false
 local function EventFrame_Handler(self, event, ...)
 	if event == "PLAYER_LOGIN" then
 		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, Chomp_PrefixSettings)
@@ -495,24 +487,24 @@ local function EventFrame_Handler(self, event, ...)
 		local GF = UnitFactionGroup("player")
 		msp.my.GF = tostring(GF)
 	end
-	if firstUpdateRun then
+	if msp.firstUpdateRun then
 		msp:Update()
 	end
 end
-msp.eventframe:SetScript("OnEvent", EventFrame_Handler)
-msp.eventframe:RegisterEvent("PLAYER_LOGIN")
+msp.eventFrame:SetScript("OnEvent", EventFrame_Handler)
+msp.eventFrame:RegisterEvent("PLAYER_LOGIN")
 
 function msp:Update()
 	local updated = false
 	-- Remember, charTable.field will return "" for empty fields.
-	local charTable = self.char[playerOwnName]
+	local charTable = self.char[PLAYER_NAME]
 	charTable.supported = true
 	for field, contents in pairs(charTable.field) do
 		if not self.my[field] then
 			updated = true
 			charTable.field[field] = nil
 			charTable.ver[field] = nil
-			RunCallback("updated", playerOwnName, field, nil, nil)
+			RunCallback("updated", PLAYER_NAME, field, nil, nil)
 		end
 	end
 	for field, contents in pairs(self.my) do
@@ -527,16 +519,16 @@ function msp:Update()
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
-				if not TT_ALL[field] then
+				if not self.ttAll[field] then
 					charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
 				end
-				RunCallback("updated", playerOwnName, field, contents, tonumber(CRC32CCache[contents], 16))
+				RunCallback("updated", PLAYER_NAME, field, contents, tonumber(CRC32CCache[contents], 16))
 			end
 		end
 	end
-	if updated or not ttCache then
+	if updated or not self.ttCache then
 		local tt = {}
-		for i, field in ipairs(TT_LIST) do
+		for i, field in ipairs(self.ttList) do
 			if not self.my[field] then
 				tt[#tt + 1] = field
 			else
@@ -544,13 +536,13 @@ function msp:Update()
 			end
 		end
 		local ttContents = table.concat(tt, SEPARATOR) or ""
-		ttCache = ("%s%sTT%s"):format(ttContents, SEPARATOR, CRC32CCache[ttContents])
+		self.ttCache = ("%s%sTT%s"):format(ttContents, SEPARATOR, CRC32CCache[ttContents])
 		-- Set this here for CRC checking elsewhere.
 		msp.my.TT = ttContents
 		charTable.ver.TT = tonumber(CRC32CCache[ttContents], 16)
-		RunCallback("received", playerOwnName)
+		RunCallback("received", PLAYER_NAME)
 	end
-	firstUpdateRun = true
+	self.firstUpdateRun = true
 	return updated
 end
 
@@ -567,7 +559,7 @@ function msp:QueueRequest(name, field)
 		error("msp:QueueRequest(): field: invalid field")
 	end
 	name = AddOn_Chomp.NameMergedRealm(name)
-	if name == playerOwnName or name:match("^([^%-]+)") == UNKNOWN then
+	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWN then
 		return false
 	end
 	local now = GetTime()
@@ -589,7 +581,7 @@ end
 
 function msp:Request(name, fields)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	if name == playerOwnName or name:match("^([^%-]+)") == UNKNOWN then
+	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWN then
 		return false
 	end
 	local now = GetTime()
@@ -605,7 +597,7 @@ function msp:Request(name, fields)
 	local toSend = {}
 	for i, field in ipairs(fields) do
 		if type(field) == "string" and field:find("^%u%u$") then
-			if TT_ALL[field] then
+			if self.ttAll[field] then
 				-- Will only get requested once, due to time marking/checking.
 				field = "TT"
 			end
@@ -630,7 +622,7 @@ end
 
 function msp:Send(name, chunks)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	if name == playerOwnName then
+	if name == PLAYER_NAME then
 		return 0
 	end
 	return Send(name, chunks, "SAFE", "REQUEST")
