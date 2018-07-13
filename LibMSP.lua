@@ -515,7 +515,39 @@ local function Chomp_Error(name)
 end
 
 local function EventFrame_Handler(self, event, ...)
-	if event == "PLAYER_LOGIN" then
+	if event == "GROUP_ROSTER_UPDATE" then
+		if not IsInGroup() then
+			return
+		end
+		local unitFormat, maxMembers
+		if IsInRaid() then
+			unitFormat = "raid%d"
+			maxMembers = MAX_RAID_MEMBERS
+		else
+			unitFormat = "party%d"
+			maxMembers = MAX_PARTY_MEMBERS
+		end
+		for i = 1, maxMembers do
+			local unit = unitFormat:format(i)
+			local relationship = UnitRealmRelationship(unit)
+			if relationship == LE_REALM_RELATION_COALESCED then
+				local name = AddOn_Chomp.NameMergedRealm(UnitFullName(unit))
+				local charTable = msp.char[name]
+				if not charTable.seenInGroup then
+					charTable.seenInGroup = true
+					charTable.scantime = nil
+					charTable.supported = nil
+					charTable.time = nil
+				end
+			elseif not relationship then
+				-- Only returns nil if the unit doesn't exist, and only doesn't
+				-- exist if we've passed the maximum present party/raid index.
+				break
+			end
+		end
+		-- Return to not trigger msp:Update() below.
+		return
+	elseif event == "PLAYER_LOGIN" then
 		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, CHOMP_PREFIX_SETTINGS)
 		AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 		local GU = UnitGUID("player")
