@@ -59,6 +59,10 @@ local TT_ALL = {
 	IC = true,
 }
 local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
+local INTERNAL_FIELDS = {
+	VP = true, TT = true, GC = true, GF = true, GR = true, GS = true,
+	GU = true,
+}
 
 local PLAYER_NAME = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
 
@@ -164,6 +168,9 @@ for constField, isField in pairs(TT_ALL) do
 		msp.ttAll[constField] = true
 	end
 end
+
+-- This constant is intended for public use.
+msp.INTERNAL_FIELDS = INTERNAL_FIELDS
 
 local function RunCallback(callbackName, ...)
 	for i, func in ipairs(msp.callback[callbackName]) do
