@@ -668,8 +668,11 @@ function msp:Request(name, fields)
 		self.char[name].supported = false
 		self.char[name].scantime = now
 	end
-	if type(fields) == "string" then
+	local fieldsType = type(fields)
+	if fieldsType == "string" then
 		fields = { fields }
+	elseif fieldsType == "nil" then
+		fields = { "TT" }
 	end
 	local toSend = {}
 	for i, field in ipairs(fields) do
