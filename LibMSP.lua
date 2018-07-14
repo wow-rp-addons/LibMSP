@@ -342,7 +342,8 @@ end
 msp.protocolversion = PROTOCOL_VERSION
 msp.my.VP = tostring(msp.protocolversion)
 
--- myver is unused, but if legacy code wants to use it, knock themselves out.
+-- This is only used internally as a shortcut to skip version info on tooltip
+-- fields.
 msp.myver = setmetatable({}, {
 	__index = function(self, field)
 		if msp.ttAll[field] then
@@ -597,10 +598,9 @@ function msp:Update()
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
-				if not self.ttAll[field] then
-					charTable.ver[field] = tonumber(CRC32CCache[contents], 16)
-				end
-				RunCallback("updated", PLAYER_NAME, field, contents, tonumber(CRC32CCache[contents], 16))
+				local version = msp.myver[field]
+				charTable.ver[field] = version
+				RunCallback("updated", PLAYER_NAME, field, contents, version)
 			end
 		end
 	end
@@ -617,7 +617,9 @@ function msp:Update()
 		self.ttCache = ("%s%sTT%s"):format(ttContents, SEPARATOR, CRC32CCache[ttContents])
 		-- Set this here for CRC checking elsewhere.
 		msp.my.TT = ttContents
-		charTable.ver.TT = tonumber(CRC32CCache[ttContents], 16)
+		local version = msp.myver.TT
+		charTable.ver.TT = version
+		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
 		RunCallback("received", PLAYER_NAME)
 	end
 	self.firstUpdateRun = true
