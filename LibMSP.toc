@@ -1,7 +1,7 @@
 ## Interface: 80000
 ## X-Interface: 80000
 ## Title: LibMSP
-## Version: 11
+## Version: 12
 ## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
