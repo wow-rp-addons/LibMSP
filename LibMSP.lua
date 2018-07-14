@@ -59,8 +59,7 @@ local TT_ALL = {
 }
 local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 local INTERNAL_FIELDS = {
-	VP = true, TT = true, GC = true, GF = true, GR = true, GS = true,
-	GU = true,
+	VP = true, GC = true, GF = true, GR = true, GS = true, GU = true,
 }
 
 local PLAYER_NAME = AddOn_Chomp.NameMergedRealm(UnitFullName("player"))
@@ -347,6 +346,8 @@ msp.myver = setmetatable({}, {
 	__index = function(self, field)
 		if msp.ttAll[field] then
 			return nil
+		elseif field == "TT" then
+			return tonumber(CRC32CCache[msp.ttContents], 16)
 		end
 		return tonumber(CRC32CCache[msp.my[field]], 16)
 	end,
@@ -407,17 +408,31 @@ function Process(name, command, isSafe)
 			return
 		end
 		msp.char[name].req[field] = now + 5
-		if crc ~= CRC32CCache[msp.my[field]] then
+		if field == "TT" then
+			-- This all has to be duplicated for TT since the original header
+			-- documentation lied.
+			if not msp.ttCache or not msp.ttContents then
+				msp:Update()
+			end
+			if crc ~= CRC32CCache[msp.ttContents] then
+				if not msp.char[name].safeReply then
+					msp.char[name].safeReply = {}
+				end
+				local reply = msp.char[name].safeReply
+				reply[#reply + 1] = msp.ttCache
+			else
+				if not msp.char[name].unsafeReply then
+					msp.char[name].unsafeReply = {}
+				end
+				local reply = msp.char[name].unsafeReply
+				reply[#reply + 1] = ("!%s%s"):format(field, CRC32CCache[msp.ttContents] or "")
+			end
+		elseif crc ~= CRC32CCache[msp.my[field]] then
 			if not msp.char[name].safeReply then
 				msp.char[name].safeReply = {}
 			end
 			local reply = msp.char[name].safeReply
-			if field == "TT" then
-				if not msp.ttCache then
-					msp:Update()
-				end
-				reply[#reply + 1] = msp.ttCache
-			elseif not msp.my[field] or msp.my[field] == "" then
+			if not msp.my[field] or msp.my[field] == "" then
 				reply[#reply + 1] = field
 			else
 				reply[#reply + 1] = ("%s%s=%s"):format(field, CRC32CCache[msp.my[field]], msp.my[field])
@@ -612,10 +627,8 @@ function msp:Update()
 				tt[#tt + 1] = ("%s=%s"):format(field, self.my[field])
 			end
 		end
-		local ttContents = table.concat(tt, SEPARATOR) or ""
-		self.ttCache = ("%s%sTT%s"):format(ttContents, SEPARATOR, CRC32CCache[ttContents])
-		-- Set this here for CRC checking elsewhere.
-		msp.my.TT = ttContents
+		msp.ttContents = table.concat(tt, SEPARATOR) or ""
+		self.ttCache = ("%s%sTT%s"):format(msp.ttContents, SEPARATOR, CRC32CCache[msp.ttContents])
 		local version = msp.myver.TT
 		charTable.ver.TT = version
 		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
