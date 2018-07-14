@@ -15,7 +15,6 @@
 
 	- Put your character's field data in the table msp.my, e.g. msp.my["NA"] = UnitName("player")
 	- When you initialise or update your character's field data, call msp:Update(); no parameters
-	- Don't mess with msp.my['TT'], that's used internally
 
 	- To request one or more fields from someone else, call msp:Request( player, fields )
 	  fields can be nil (gets you TT i.e. tooltip), or a string (one field) or a table (multiple)
@@ -24,10 +23,10 @@
 	  update your display: tinsert( msp.callback.received, YourCallbackFunctionHere )
 	  You get (as sole parameter) the name of the player sending you the data
 
-	- Player names appear EXACTLY as the game sends them (case sensitive!).
+	- Player names appear as the game sends them (case sensitive!), with the realm always merged.
 	- Players on different realms are referenced like this: "Name-Realm" - yes, that does work!
 
-	- All field names are two capital letters. Best if you agree any extensions.
+	- All field names must be two capital letters.
 
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
