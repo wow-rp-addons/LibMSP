@@ -294,7 +294,6 @@ local emptyMeta = {
 	__index = function(self, field)
 		return ""
 	end,
-	__metatable = false,
 }
 
 local charMeta = {
@@ -309,7 +308,6 @@ local charMeta = {
 			return nil
 		end
 	end,
-	__metatable = false,
 }
 
 setmetatable(msp.char, {
@@ -327,7 +325,6 @@ setmetatable(msp.char, {
 		-- to create anything here.
 		return
 	end,
-	__metatable = false,
 })
 
 for charName, charTable in pairs(msp.char) do
