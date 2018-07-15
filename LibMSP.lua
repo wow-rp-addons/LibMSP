@@ -611,6 +611,7 @@ function msp:Update()
 			if contents and contents:find(SEPARATOR, nil, true) then
 				-- Hopefully nobody notices.
 				contents = contents:gsub(SEPARATOR, SEPARATOR_REPLACEMENT)
+				self.my[field] = contents
 			end
 			if contents and not AddOn_Chomp.CheckLoggedContents(contents) then
 				self.my[field] = charTable.field[field] ~= "" and charTable.field[field] or nil
@@ -618,7 +619,7 @@ function msp:Update()
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
-				local version = msp.myver[field]
+				local version = self.myver[field]
 				charTable.ver[field] = version
 				RunCallback("updated", PLAYER_NAME, field, contents, version)
 			end
@@ -633,9 +634,9 @@ function msp:Update()
 				tt[#tt + 1] = ("%s:%s"):format(field, self.my[field])
 			end
 		end
-		msp.ttContents = table.concat(tt, SEPARATOR) or ""
-		self.ttCache = ("%s%sTT%s"):format(msp.ttContents, SEPARATOR, CRC32CCache[msp.ttContents])
-		local version = msp.myver.TT
+		self.ttContents = table.concat(tt, SEPARATOR) or ""
+		self.ttCache = ("%s%sTT%s"):format(self.ttContents, SEPARATOR, CRC32CCache[self.ttContents])
+		local version = self.myver.TT
 		charTable.ver.TT = version
 		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
 		RunCallback("received", PLAYER_NAME)
