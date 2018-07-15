@@ -509,9 +509,8 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 end
 
 local function Chomp_Callback(...)
-	local prefix, message, channel, sender = ...
+	local prefix, message, channel, name = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
-	local name = AddOn_Chomp.NameMergedRealm(sender)
 	msp.char[name].supported = true
 	msp.char[name].scantime = nil
 	local method = channel:match("%:(.+)$")
