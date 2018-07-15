@@ -511,6 +511,11 @@ end
 local function Chomp_Callback(...)
 	local prefix, message, channel, name = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
+	if sessionID == -1 then
+		-- Chomp metadata wasn't present, meaning it's a legacy MSP client and
+		-- we should ignore it.
+		return
+	end
 	msp.char[name].supported = true
 	msp.char[name].scantime = nil
 	local method = channel:match("%:(.+)$")
