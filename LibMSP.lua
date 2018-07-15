@@ -44,7 +44,8 @@ elseif not AddOn_Chomp or AddOn_Chomp.GetVersion() < CHOMP_VERSION then
 end
 
 local PREFIX = "MSP"
-local SEPARATOR = string.char(0x7f)
+local SEPARATOR = string.char(0x60)
+local SEPARATOR_REPLACEMENT = string.char(0x27)
 
 local PROBE_FREQUENCY = 300
 local FIELD_FREQUENCY = 30
@@ -386,7 +387,7 @@ end
 
 local Process
 function Process(name, command, isSafe)
-	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)=?(.*)")
+	local action, field, crc, contents = command:match("(%p?)(%u%u)(%x*)%:?(.*)")
 	if not field then return end
 	if crc == "0" then
 		crc = ""
@@ -432,7 +433,7 @@ function Process(name, command, isSafe)
 			if not msp.my[field] or msp.my[field] == "" then
 				reply[#reply + 1] = field
 			else
-				reply[#reply + 1] = ("%s%s=%s"):format(field, CRC32CCache[msp.my[field]], msp.my[field])
+				reply[#reply + 1] = ("%s%s:%s"):format(field, CRC32CCache[msp.my[field]], msp.my[field])
 			end
 		else
 			if not msp.char[name].unsafeReply then
@@ -608,12 +609,17 @@ function msp:Update()
 		end
 		if field ~= "TT" then
 			if contents and contents:find(SEPARATOR, nil, true) then
+				-- Hopefully nobody notices.
+				contents = contents:gsub(SEPARATOR, SEPARATOR_REPLACEMENT)
+				self.my[field] = contents
+			end
+			if contents and not AddOn_Chomp.CheckLoggedContents(contents) then
 				self.my[field] = charTable.field[field] ~= "" and charTable.field[field] or nil
-				geterrorhandler()(("LibMSP: Found illegal separator byte in field %s, contents reverted to last known-good value."):format(field))
+				geterrorhandler()(("LibMSP: Found illegal byte or sequence in field %s, contents reverted to last known-good value."):format(field))
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
-				local version = msp.myver[field]
+				local version = self.myver[field]
 				charTable.ver[field] = version
 				RunCallback("updated", PLAYER_NAME, field, contents, version)
 			end
@@ -625,12 +631,12 @@ function msp:Update()
 			if not self.my[field] then
 				tt[#tt + 1] = field
 			else
-				tt[#tt + 1] = ("%s=%s"):format(field, self.my[field])
+				tt[#tt + 1] = ("%s:%s"):format(field, self.my[field])
 			end
 		end
-		msp.ttContents = table.concat(tt, SEPARATOR) or ""
-		self.ttCache = ("%s%sTT%s"):format(msp.ttContents, SEPARATOR, CRC32CCache[msp.ttContents])
-		local version = msp.myver.TT
+		self.ttContents = table.concat(tt, SEPARATOR) or ""
+		self.ttCache = ("%s%sTT%s"):format(self.ttContents, SEPARATOR, CRC32CCache[self.ttContents])
+		local version = self.myver.TT
 		charTable.ver.TT = version
 		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
 		RunCallback("received", PLAYER_NAME)
