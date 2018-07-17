@@ -1,7 +1,9 @@
 ## Interface: 80000
 ## X-Interface: 80000
 ## Title: LibMSP
-## Version: 12
+## Version: 13
+## X-WoW-Version: 8.0.1
+## X-WoW-Build: 27101
 ## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
