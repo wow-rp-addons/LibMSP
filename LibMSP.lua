@@ -621,6 +621,7 @@ function msp:Update()
 				charTable.field[field] = contents
 				local version = self.myver[field]
 				charTable.ver[field] = version
+				charTable.time[field] = TIME_MAX
 				RunCallback("updated", PLAYER_NAME, field, contents, version)
 			end
 		end
@@ -638,6 +639,7 @@ function msp:Update()
 		self.ttCache = ("%s%sTT%s"):format(self.ttContents, SEPARATOR, CRC32CCache[self.ttContents])
 		local version = self.myver.TT
 		charTable.ver.TT = version
+		charTable.time.TT = TIME_MAX
 		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
 		RunCallback("received", PLAYER_NAME)
 	end
