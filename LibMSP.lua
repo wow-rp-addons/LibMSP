@@ -168,8 +168,8 @@ for constField, isField in pairs(TT_ALL) do
 	end
 end
 
--- This constant is intended for public use.
-msp.INTERNAL_FIELDS = INTERNAL_FIELDS
+-- This constant is intended for public use, but not modification.
+msp.INTERNAL_FIELDS = setmetatable({}, { __index = INTERNAL_FIELDS, __metatable = false, })
 
 local function RunCallback(callbackName, ...)
 	for i, func in ipairs(msp.callback[callbackName]) do
