@@ -33,7 +33,7 @@
 
 local VERSION = 14
 local PROTOCOL_VERSION = 3
-local CHOMP_VERSION = 5
+local CHOMP_VERSION = 6
 
 if IsLoggedIn() then
 	error(("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
