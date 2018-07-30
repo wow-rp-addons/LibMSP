@@ -311,7 +311,7 @@ local charMeta = {
 	end,
 }
 
-setmetatable(msp.char, {
+local mspCharMeta = {
 	__index = function(self, name)
 		-- Account for unmaintained code using names without realms.
 		name = AddOn_Chomp.NameMergedRealm(name)
@@ -326,7 +326,9 @@ setmetatable(msp.char, {
 		-- to create anything here.
 		return
 	end,
-})
+}
+
+setmetatable(msp.char, mspCharMeta)
 
 for charName, charTable in pairs(msp.char) do
 	setmetatable(charTable, charMeta)
@@ -349,7 +351,8 @@ msp.myver = setmetatable({}, {
 		end
 		return tonumber(CRC32CCache[msp.my[field]], 16)
 	end,
-	__newindex = function() end
+	__newindex = function() end,
+	__metatable = false,
 })
 
 local function AddTTField(field)
@@ -578,6 +581,9 @@ local function EventFrame_Handler(self, event, ...)
 		if GF == "Neutral" then
 			self:RegisterEvent("NEUTRAL_FACTION_SELECT_RESULT")
 		end
+		emptyMeta.__metatable = false
+		charMeta.__metatable = false
+		mspCharMeta.__metatable = false
 	elseif event == "NEUTRAL_FACTION_SELECT_RESULT" then
 		local GF = UnitFactionGroup("player")
 		msp.my.GF = tostring(GF)
