@@ -401,6 +401,10 @@ function Process(name, command, isSafe)
 	local crcNum = tonumber(crc, 16)
 	local now = GetTime()
 	if action == "?" then
+		if not msp.ttCache then
+			-- If an update hasn't successfully run, don't respond to requests.
+			return
+		end
 		if msp.ttAll[field] then
 			field = "TT"
 		end
@@ -412,9 +416,6 @@ function Process(name, command, isSafe)
 		if field == "TT" then
 			-- This all has to be duplicated for TT since the original header
 			-- documentation lied.
-			if not msp.ttCache or not msp.ttContents then
-				msp:Update()
-			end
 			if crc ~= CRC32CCache[msp.ttContents] then
 				if not msp.char[name].safeReply then
 					msp.char[name].safeReply = {}
@@ -588,7 +589,7 @@ local function EventFrame_Handler(self, event, ...)
 		local GF = UnitFactionGroup("player")
 		msp.my.GF = tostring(GF)
 	end
-	if msp.firstUpdateRun then
+	if msp.ttCache then
 		msp:Update()
 	end
 end
@@ -596,6 +597,9 @@ msp.eventFrame:SetScript("OnEvent", EventFrame_Handler)
 msp.eventFrame:RegisterEvent("PLAYER_LOGIN")
 
 function msp:Update()
+	if not msp.my.VA or msp.my.VA == "" then
+		error("msp:Update(): msp.my.VA is absent, assuming profile is not set. Update aborted.")
+	end
 	local updated = false
 	-- Remember, charTable.field will return "" for empty fields.
 	local charTable = self.char[PLAYER_NAME]
@@ -621,7 +625,7 @@ function msp:Update()
 			end
 			if contents and not AddOn_Chomp.CheckLoggedContents(contents) then
 				self.my[field] = charTable.field[field] ~= "" and charTable.field[field] or nil
-				geterrorhandler()(("LibMSP: Found illegal byte or sequence in field %s, contents reverted to last known-good value."):format(field))
+				geterrorhandler()(("msp:Update(): Found illegal byte or sequence in field %s, contents reverted to last known-good value."):format(field))
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
@@ -649,7 +653,6 @@ function msp:Update()
 		RunCallback("updated", PLAYER_NAME, "TT", nil, version)
 		RunCallback("received", PLAYER_NAME)
 	end
-	self.firstUpdateRun = true
 	return updated
 end
 
@@ -748,6 +751,6 @@ end
 
 msp.version = VERSION
 
-if msp.firstUpdateRun then
+if msp.ttCache then
 	msp:Update()
 end
