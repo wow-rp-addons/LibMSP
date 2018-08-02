@@ -31,7 +31,7 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local VERSION = 14
+local VERSION = 15
 local PROTOCOL_VERSION = 3
 local CHOMP_VERSION = 6
 
