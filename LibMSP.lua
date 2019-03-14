@@ -460,7 +460,7 @@ function Process(name, command, isSafe)
 				-- but should have been sent with a tooltip (if they're used by
 				-- the opposing addon).
 				if msp.char[name].field[field] and (msp.char[name].time[field] or 0) < now - PROBE_FREQUENCY then
-					Process(name, field)
+					Process(name, field, isSafe)
 				end
 			end
 		end
