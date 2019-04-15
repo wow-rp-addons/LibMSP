@@ -749,6 +749,12 @@ function msp:PlayerKnownAbout(name)
 	return self.char[name].supported ~= nil
 end
 
+-- Strips TRP3 markup tags from a given string. The contents of the tags will be entirely
+-- removed.
+function msp:StripTRP3MarkupTags(input)
+	return string.gsub(input, "%{.-%}", "");
+end
+
 msp.version = VERSION
 
 if msp.ttCache then
