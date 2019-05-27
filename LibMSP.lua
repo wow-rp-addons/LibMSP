@@ -332,7 +332,7 @@ setmetatable(msp.char, mspCharMeta)
 
 for charName, charTable in pairs(msp.char) do
 	setmetatable(charTable, charMeta)
-	if rawget(charTable.field) then
+	if rawget(charTable, "field") then
 		setmetatable(charTable.field, emptyMeta)
 	end
 end
