@@ -1,10 +1,10 @@
-## Interface: 80100
-## X-Interface: 80100
-## X-Interface-Required: 80100
-## X-WoW-Version: 8.1.5
-## X-WoW-Build: 29718
+## Interface: 80200
+## X-Interface: 80200
+## X-Interface-Required: 80200
+## X-WoW-Version: 8.2.0
+## X-WoW-Build: 30888
 ## Title: LibMSP
-## Version: 17
+## Version: 18
 ## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
