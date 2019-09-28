@@ -1,0 +1,19 @@
+language: minimal
+
+addons:
+  apt:
+    packages:
+      - luarocks
+
+install: luarocks install --local luacheck
+
+jobs:
+  include:
+    - stage: Build
+      script:
+        - /home/travis/.luarocks/bin/luacheck .
+
+notifications:
+  email:
+    on_success: never
+    on_failure: always

@@ -173,7 +173,7 @@ msp.INTERNAL_FIELDS = setmetatable({}, { __index = INTERNAL_FIELDS, __metatable 
 
 local function RunCallback(callbackName, ...)
 	for i, func in ipairs(msp.callback[callbackName]) do
-		xpcall(func, geterrorhandler(), ...)
+		xpcall(func, CallErrorHandler, ...)
 	end
 end
 
@@ -384,7 +384,7 @@ local function Send(name, chunks, msgSafety, msgType)
 	else
 		return 0
 	end
-	local sentMethod = AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, CHOMP_OPTS_MATRIX[msgSafety][msgType])
+	AddOn_Chomp.SmartAddonMessage(PREFIX, payload, "WHISPER", name, CHOMP_OPTS_MATRIX[msgSafety][msgType])
 	return math.ceil(#payload / 255)
 end
 
@@ -455,12 +455,12 @@ function Process(name, command, isSafe)
 		-- them once after getting a response.
 		msp.char[name].time[field] = not UNIT_FIELD[field] and now or TIME_MAX
 		if field == "TT" then
-			for field in pairs(msp.ttAll) do
+			for ttField in pairs(msp.ttAll) do
 				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
 				-- but should have been sent with a tooltip (if they're used by
 				-- the opposing addon).
-				if msp.char[name].field[field] and (msp.char[name].time[field] or 0) < now - PROBE_FREQUENCY then
-					Process(name, field, isSafe)
+				if msp.char[name].field[ttField] and (msp.char[name].time[ttField] or 0) < now - PROBE_FREQUENCY then
+					Process(name, ttField, isSafe)
 				end
 			end
 		end
@@ -514,7 +514,7 @@ local function HandleMessage(name, message, isSafe, sessionID, isComplete)
 end
 
 local function Chomp_Callback(...)
-	local prefix, message, channel, name = ...
+	local _, message, channel, name = ...
 	local sessionID, msgID, msgTotal = select(13, ...)
 	if sessionID == -1 then
 		-- Chomp metadata wasn't present, meaning it's a legacy MSP client and
@@ -572,7 +572,7 @@ local function EventFrame_Handler(self, event, ...)
 		AddOn_Chomp.RegisterAddonPrefix(PREFIX, Chomp_Callback, CHOMP_PREFIX_SETTINGS)
 		AddOn_Chomp.RegisterErrorCallback(Chomp_Error)
 		local GU = UnitGUID("player")
-		local class, GC, race, GR, GS, name, realm = GetPlayerInfoByGUID(GU)
+		local _, GC, _, GR, GS, _, _ = GetPlayerInfoByGUID(GU)
 		local GF = UnitFactionGroup("player")
 		msp.my.GU = tostring(GU)
 		msp.my.GC = tostring(GC)
@@ -625,7 +625,7 @@ function msp:Update()
 			end
 			if contents and not AddOn_Chomp.CheckLoggedContents(contents) then
 				self.my[field] = charTable.field[field] ~= "" and charTable.field[field] or nil
-				geterrorhandler()(("msp:Update(): Found illegal byte or sequence in field %s, contents reverted to last known-good value."):format(field))
+				CallErrorHandler(("msp:Update(): Found illegal byte or sequence in field %s, contents reverted to last known-good value."):format(field))
 			elseif charTable.field[field] ~= (contents or "") then
 				updated = true
 				charTable.field[field] = contents
@@ -668,7 +668,7 @@ function msp:QueueRequest(name, field)
 		error("msp:QueueRequest(): field: invalid field")
 	end
 	name = AddOn_Chomp.NameMergedRealm(name)
-	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWN then
+	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWNOBJECT then
 		return false
 	end
 	local now = GetTime()
@@ -690,7 +690,7 @@ end
 
 function msp:Request(name, fields)
 	name = AddOn_Chomp.NameMergedRealm(name)
-	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWN then
+	if name == PLAYER_NAME or name:match("^([^%-]+)") == UNKNOWNOBJECT then
 		return false
 	end
 	local now = GetTime()
@@ -752,7 +752,7 @@ end
 -- Strips TRP3 markup tags from a given string. The contents of the tags will be entirely
 -- removed.
 function msp:StripTRP3MarkupTags(input)
-	return string.gsub(input, "%{.-%}", "");
+	return string.gsub(input, "%{.-%}", "")
 end
 
 msp.version = VERSION
