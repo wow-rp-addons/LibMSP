@@ -1,10 +1,10 @@
-## Interface: 80205
-## X-Interface: 80205
-## X-Interface-Required: 80205
-## X-WoW-Version: 8.2.5
-## X-WoW-Build: 31961
+## Interface: 80300
+## X-Interface: 80300
+## X-Interface-Required: 80300
+## X-WoW-Version: 8.3.0
+## X-WoW-Build: 34220
 ## Title: LibMSP
-## Version: 19
+## Version: 20
 ## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
