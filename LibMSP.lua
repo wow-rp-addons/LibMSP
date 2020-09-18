@@ -1,7 +1,7 @@
 --[[
 	Project: LibMSP
 	Author: "Etarna Moonshyne"
-	Author: Renaud "Ellypse" Parize
+	Author: Morgane "Ellypse" Parize
 	Author: Justin Snelgrove
 
 	This work is licensed under the Creative Commons Zero license. While not
