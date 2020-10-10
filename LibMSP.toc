@@ -5,7 +5,7 @@
 ## X-WoW-Build: 34220
 ## Title: LibMSP
 ## Version: 20
-## Author: "Etarna Moonshyne"; Renaud "Ellypse" Parize; Justin Snelgrove
+## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
 ## X-License: CC0
