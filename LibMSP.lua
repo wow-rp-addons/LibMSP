@@ -33,7 +33,7 @@
 
 local VERSION = 20
 local PROTOCOL_VERSION = 3
-local CHOMP_VERSION = 11
+local CHOMP_VERSION = 12
 
 if IsLoggedIn() then
 	error(("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
@@ -43,7 +43,7 @@ elseif not AddOn_Chomp or AddOn_Chomp.GetVersion() < CHOMP_VERSION then
 	error(("LibMSP requires Chomp v%d or later."):format(CHOMP_VERSION))
 end
 
-local PREFIX = "MSP"
+local PREFIX = "MSP2"
 local SEPARATOR = string.char(0x60)
 local SEPARATOR_REPLACEMENT = string.char(0x27)
 
