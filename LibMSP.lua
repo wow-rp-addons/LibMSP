@@ -31,9 +31,9 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local VERSION = 23
+local VERSION = 24
 local PROTOCOL_VERSION = 3
-local CHOMP_VERSION = 14
+local CHOMP_VERSION = 15
 
 if IsLoggedIn() then
 	error(("LibMSP (embedded in: %s) cannot be loaded after login."):format((...)))
