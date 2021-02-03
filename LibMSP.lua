@@ -56,7 +56,7 @@ local TT_LIST = { "VP", "VA", "NA", "NH", "NI", "NT", "RA", "CU", "FR", "FC" }
 local TT_ALL = {
 	VP = true, VA = true, NA = true, NH = true,	NI = true, NT = true,
 	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
-	IC = true, PX = true,
+	IC = true, PX = true, PN = true,
 }
 local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 local INTERNAL_FIELDS = {
