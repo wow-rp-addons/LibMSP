@@ -61,5 +61,7 @@ stds.wowstd = {
 				"rshift",
 			},
 		},
+
+		"tContains",
 	},
 }
