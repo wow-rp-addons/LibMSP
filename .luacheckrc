@@ -56,6 +56,7 @@ stds.wowstd = {
 	read_globals = {
 		bit = {
 			fields = {
+				"arshift",
 				"bxor",
 				"band",
 				"rshift",

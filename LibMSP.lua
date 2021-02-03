@@ -245,19 +245,34 @@ local CRC32C = {
 }
 
 local function crc32c_hash(s)
-	local XOR, AND, RSHIFT, byte = bit.bxor, bit.band, bit.rshift, string.byte
+	local bxor, band, brshift, strbyte = bit.bxor, bit.band, bit.rshift, string.byte
+
 	local crc = 0xffffffff
-	for i = 1, #s do
-		local b = byte(s, i)
-		crc = XOR(RSHIFT(crc, 8), CRC32C[AND(XOR(crc, b), 0xFF) + 1])
+	local len = #s
+
+	for i = 1, len - 7, 8 do
+		local b1, b2, b3, b4, b5, b6, b7, b8 = strbyte(s, i, i + 7)
+
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b1), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b2), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b3), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b4), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b5), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b6), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b7), 0xFF) + 1])
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b8), 0xFF) + 1])
 	end
-	return XOR(crc, 0xffffffff)
+
+	for i = (len - (len % 8)) + 1, len do
+		local b = strbyte(s, i)
+		crc = bxor(brshift(crc, 8), CRC32C[band(bxor(crc, b), 0xFF) + 1])
+	end
+
+	return bxor(crc, 0xffffffff)
 end
 
 local function tohex(n)
-	local high = bit.rshift(n, 16)
-	local low = n % 0x10000
-	return ("%04X%04X"):format(high, low):match("^0*(%x-)$")
+	return string.format("%.X", bit.arshift(n, 0))
 end
 
 local function crc32c_tostring(s)
