@@ -337,6 +337,13 @@ local mspCharMeta = {
 		if not rawget(self, name) then
 			rawset(self, name, setmetatable({}, charMeta))
 			RunCallback("dataload", name, self[name])
+
+			local fields = rawget(self, name).field;
+			local ver = rawget(self, name).ver;
+
+			for field, value in pairs(fields) do
+				ver[field] = ver[field] or tonumber(CRC32CCache[value], 16);
+			end
 		end
 		return rawget(self, name)
 	end,
