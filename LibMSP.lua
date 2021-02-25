@@ -290,6 +290,10 @@ local CRC32CCache = setmetatable({}, {
 	end,
 })
 
+function msp:CRC32(s)
+	return tonumber(CRC32CCache[s], 16);
+end
+
 -- Benchmarking function.
 function msp:DebugHashTest(text, silent)
 	local startTime = debugprofilestop()
