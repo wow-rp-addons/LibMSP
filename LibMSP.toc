@@ -4,7 +4,7 @@
 ## X-WoW-Version: 9.0.2
 ## X-WoW-Build: 36639
 ## Title: LibMSP
-## Version: 24
+## Version: 25
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
