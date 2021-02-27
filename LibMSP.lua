@@ -384,7 +384,9 @@ local function AddTTField(field)
 	if type(field) ~= "string" or not field:find("^%u%u$") then
 		error("msp:AddFieldsToTooltip(): All fields must be strings matching Lua pattern \"%u%u\".", 3)
 	end
-	msp.ttList[#msp.ttList + 1] = field
+	if not tContains(msp.ttList, field) then
+		msp.ttList[#msp.ttList + 1] = field
+	end
 	if not msp.ttAll[field] then
 		msp.ttAll[field] = true
 	end
