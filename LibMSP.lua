@@ -58,7 +58,6 @@ local TT_ALL = {
 	RA = true, CU = true, FR = true, FC = true,	RC = true, CO = true,
 	IC = true, PX = true,
 }
-local UNIT_FIELD = { GC = true, GF = true, GR = true, GS = true, GU = true, }
 local INTERNAL_FIELDS = {
 	VP = true, GC = true, GF = true, GR = true, GS = true, GU = true,
 }
@@ -451,9 +450,7 @@ function Process(name, command, isSafe)
 	elseif action == "" and isSafe then
 		msp.char[name].field[field] = contents
 		msp.char[name].ver[field] = crcNum
-		-- Assume unit fields won't change during a session, so only request
-		-- them once after getting a response.
-		msp.char[name].time[field] = not UNIT_FIELD[field] and now or TIME_MAX
+		msp.char[name].time[field] = now
 		if field == "TT" then
 			for ttField in pairs(msp.ttAll) do
 				-- Clear fields that haven't been updated in PROBE_FREQUENCY,
