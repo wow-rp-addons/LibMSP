@@ -41,6 +41,8 @@ stds.wow = {
 		"IsInGroup",
 		"IsInRaid",
 		"IsLoggedIn",
+		"IsTrialAccount",
+		"IsVeteranTrialAccount",
 		"LE_REALM_RELATION_COALESCED",
 		"MAX_PARTY_MEMBERS",
 		"MAX_RAID_MEMBERS",

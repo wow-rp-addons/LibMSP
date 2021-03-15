@@ -604,6 +604,15 @@ local function EventFrame_Handler(self, event, ...)
 		msp.my.GR = tostring(GR)
 		msp.my.GS = tostring(GS)
 		msp.my.GF = tostring(GF)
+
+		if IsTrialAccount() then
+			msp.my.TR = "1"
+		elseif IsVeteranTrialAccount() then
+			msp.my.TR = "2"
+		else
+			msp.my.TR = "0"
+		end
+
 		if GF == "Neutral" then
 			self:RegisterEvent("NEUTRAL_FACTION_SELECT_RESULT")
 		end
