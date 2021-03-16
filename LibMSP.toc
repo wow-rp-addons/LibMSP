@@ -1,10 +1,9 @@
-## Interface: 90002
-## X-Interface: 90002
-## X-Interface-Required: 90002
-## X-WoW-Version: 9.0.2
-## X-WoW-Build: 36639
+## Interface: 90005
+## X-Interface: 90005
+## X-Interface-Required: 90005
+## X-WoW-Version: 9.0.5
 ## Title: LibMSP
-## Version: 25
+## Version: 26
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
