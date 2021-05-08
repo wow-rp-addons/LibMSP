@@ -31,7 +31,7 @@
 	- For more information, see documentation on the Mary Sue Protocol - http://moonshyne.org/msp/
 ]]
 
-local VERSION = 26
+local VERSION = 27
 local PROTOCOL_VERSION = 3
 local CHOMP_VERSION = 17
 
@@ -290,7 +290,7 @@ local CRC32CCache = setmetatable({}, {
 })
 
 function msp:CRC32(s)
-	return tonumber(CRC32CCache[s], 16);
+	return tonumber(CRC32CCache[s], 16)
 end
 
 -- Benchmarking function.
@@ -337,13 +337,35 @@ local mspCharMeta = {
 			rawset(self, name, setmetatable({}, charMeta))
 			RunCallback("dataload", name, self[name])
 
-			local fields = rawget(self, name).field;
-			local ver = rawget(self, name).ver;
+			local fields = rawget(self, name).field
+			local ver = rawget(self, name).ver
 
 			for field, value in pairs(fields) do
-				ver[field] = ver[field] or tonumber(CRC32CCache[value], 16);
+				if not ver[field] and not msp.ttAll[field] then
+					ver[field] = ver[field] or tonumber(CRC32CCache[value], 16)
+				end
+			end
+
+			-- Calculate TT version separately from the assigned data.
+
+			if not ver.TT then
+				local tt = {}
+
+				for _, field in ipairs(msp.ttList) do
+					local contents = fields[field]
+
+					if contents == "" then
+						tt[#tt + 1] = field
+					else
+						tt[#tt + 1] = string.format("%s:%s", field, contents)
+					end
+				end
+
+				local ttContents = table.concat(tt, SEPARATOR)
+				ver.TT = tonumber(CRC32CCache[ttContents], 16)
 			end
 		end
+
 		return rawget(self, name)
 	end,
 	__newindex = function(self, name, value)
