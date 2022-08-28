@@ -1,4 +1,7 @@
-## Interface: 90100
+## Interface: 90207
+## Interface-Wrath: 30400
+## Interface-TBC: 20504
+## Interface-Vanilla: 11403
 ## Title: LibMSP
 ## Version: 27
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
