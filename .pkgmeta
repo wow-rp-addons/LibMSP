@@ -9,3 +9,7 @@ ignore:
 
 externals:
   Libs/Chomp: https://github.com/wow-rp-addons/Chomp
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
