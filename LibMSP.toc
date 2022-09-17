@@ -3,7 +3,7 @@
 ## Interface-TBC: 20504
 ## Interface-Vanilla: 11403
 ## Title: LibMSP
-## Version: 27
+## Version: 30
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
 ## X-Category: Library
