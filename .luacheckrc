@@ -46,10 +46,13 @@ stds.wow = {
 		"LE_REALM_RELATION_COALESCED",
 		"MAX_PARTY_MEMBERS",
 		"MAX_RAID_MEMBERS",
+		"UnitClass",
 		"UnitFactionGroup",
 		"UnitFullName",
 		"UnitGUID",
+		"UnitRace",
 		"UnitRealmRelationship",
+		"UnitSex",
 		"UNKNOWNOBJECT",
 	},
 }
