@@ -1,3 +1,3 @@
-## v30
+## v31
 
-- Fixed an issue with the "GC", "GR", and "GS" fields not being populated on login in Classic.
+- Removed embedded libraries. Consumers must now themselves load Chomp (and its dependencies) before loading LibMSP.
