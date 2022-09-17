@@ -10,4 +10,6 @@
 ## X-Category: Library
 ## X-License: CC0
 
+Libs\Chomp\Chomp.xml
+
 LibMSP.xml
