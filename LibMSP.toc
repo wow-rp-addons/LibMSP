@@ -10,6 +10,9 @@
 ## X-Category: Library
 ## X-License: CC0
 
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\ChatThrottleLib\ChatThrottleLib.xml
 Libs\Chomp\Chomp.xml
 
 LibMSP.xml
