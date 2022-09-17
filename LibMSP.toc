@@ -3,9 +3,10 @@
 ## Interface-TBC: 20504
 ## Interface-Vanilla: 11403
 ## Title: LibMSP
-## Version: 30
+## Version: @project-version@
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
 ## Notes: New MSP implementation and supporting libraries.
+## OptionalDeps: Chomp
 ## X-Category: Library
 ## X-License: CC0
 

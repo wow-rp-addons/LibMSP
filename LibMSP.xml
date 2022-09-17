@@ -1,4 +1,4 @@
-<Ui xmlns="http://www.blizzard.com/wow/ui/">
-	<Include file="Chomp\Chomp.xml"/>
+<Ui>
+	<Include file="Libs\Chomp\Chomp.xml"/>
 	<Script file="LibMSP.lua"/>
 </Ui>

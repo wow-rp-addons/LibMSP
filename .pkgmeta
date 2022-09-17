@@ -1,0 +1,11 @@
+package-as: LibMSP
+enable-nolib-creation: no
+
+ignore:
+ - Libs/*/*.toc
+ - Libs/*/tests
+ - .gitkeep
+ - Makefile
+
+externals:
+  Libs/Chomp: https://github.com/wow-rp-addons/Chomp
