@@ -1,10 +1,11 @@
-## Interface: 100005
+## Interface: 100100
 ## Interface-Wrath: 30401
 ## Interface-TBC: 20504
 ## Interface-Vanilla: 11403
 ## Title: LibMSP
-## Version: @project-version@
 ## Author: "Etarna Moonshyne"; Morgane "Ellypse" Parize; Justin Snelgrove
+## Version: @project-version@
+## IconAtlas: minortalents-icon-book
 ## Notes: New MSP implementation and supporting libraries.
 ## OptionalDeps: Chomp
 ## X-Category: Library
