@@ -12,7 +12,3 @@ externals:
   Libs/ChatThrottleLib: https://repos.curseforge.com/wow/chatthrottlelib/trunk
   Libs/Chomp: https://github.com/wow-rp-addons/Chomp
   Libs/LibStub: https://repos.curseforge.com/wow/libstub/trunk
-
-manual-changelog:
-  filename: CHANGELOG.md
-  markup-type: markdown
