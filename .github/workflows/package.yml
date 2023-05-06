@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create Package
-        uses: BigWigsMods/packager@v2
+        uses: BigWigsMods/packager@master
         env:
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
         with:
