@@ -5,7 +5,7 @@ ignore:
  - Libs/*/*.toc
  - Libs/*/tests
  - .gitkeep
- - Makefile
+ - justfile
 
 externals:
   Libs/CallbackHandler-1.0: https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0
