@@ -18,8 +18,6 @@ jobs:
         uses: BigWigsMods/packager@v2
         env:
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: -S
 
       - name: Send Webhook Notification
         if: failure()
